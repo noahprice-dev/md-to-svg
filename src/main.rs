@@ -1,7 +1,9 @@
 use cosmic_text::Attrs;
+use cosmic_text::BorrowedWithFontSystem;
 use cosmic_text::Buffer;
 use cosmic_text::FontSystem;
 use cosmic_text::Metrics;
+use cosmic_text::Shaping;
 use markdown::mdast::Node;
 use markdown::{ParseOptions};
 use md_to_svg::parser::parse_blocks;
@@ -42,6 +44,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 // Pass the buffer with Size into this function alongside each Line from the Markdown.
 // On the line perform markdown::to_ast
 // Return the Node tree.
+fn wrap_line(
+    line: &str,
+    buffer: &mut BorrowedWithFontSystem<'_, Buffer>,
+    attrs: &Attrs<'_>,
+) -> Vec<String> {
+    // Update our buffer with the Line string.
+    buffer.set_text(line, attrs, Shaping::Advanced, None);
+    buffer.shape_until_scroll(false); // Do not limit rendered text to fit Canvas height.
+
+    let mut wrapped_lines: Vec<String> = Vec::new();
+
+    // Retrieve the Layed out Lines
+    for run in buffer.layout_runs() {
+        // Get the first and last glyph of our entire run.
+        let first_glyph = run.glyphs.first().map(|g| g.start).unwrap_or(0);
+        let last_glyph = run.glyphs.last().map(|g| g.end).unwrap_or(0);
+
+        // Get the line for this run. Note that if we do not have an inherent linebreak (\n) we always have 0.
+        if let Some(buffer_line) = buffer.lines.get(run.line_i) {
+            // Get the full input string.
+            let full_paragraph_text = buffer_line.text();
+            let visual_line_string = &full_paragraph_text[first_glyph..last_glyph];
+            wrapped_lines.push(visual_line_string.to_string())
+        }
+    }
+
+    wrapped_lines
+}
 
 fn write_lines_to_file(asts: Vec<Node>) {
     // get our file - note this will overwrite the contents each time
