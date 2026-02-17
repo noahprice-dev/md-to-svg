@@ -3,33 +3,8 @@ use markdown::mdast::Node;
 use regex::{Regex, RegexSet};
 use std::{collections::HashMap, vec};
 
-pub struct SvgOptions {
-    // SVG Canvas Options
-    width: usize,
-    height: usize,
-    // ? Support CSS Style padding args
-    top_padding: usize,
-    right_padding: usize,
-    bottom_padding: usize,
-    left_padding: usize,
 
-    // Font Details
-    font_size: usize,
-    font_family: String,
 
-    // Bullet Style Options
-    bullet_indent: usize,
-    bullet_char: String,
-
-    // Header Style Options
-    header_scales: HashMap<usize, f32>,
-    header_margin_top: f32,
-    header_margin_bot: f32,
-}
-
-// incomplete list of missing variants:
-// - Table
-// - Code
 #[derive(Debug, Clone)]
 pub struct StyledBlock {
     pub text: String,
@@ -54,6 +29,9 @@ impl StyledBlock {
     }
 }
 
+// todo incomplete list of missing variants:
+// - Table
+// - Blockquote
 #[derive(Clone, Debug)]
 pub enum StyledLine {
     Header {

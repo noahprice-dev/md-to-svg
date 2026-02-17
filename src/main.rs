@@ -26,6 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ? Note that this defines the allowable space to write into. If we are unable to fit the full string, it will do as much as possible then stop.
     buffer.set_size(Some(600.0), None);
 
+
     // Attributes handle the styling and font family, among other things. Defaults to a sans-serif
     let attrs = Attrs::new();
     let opts = ParseOptions::default();

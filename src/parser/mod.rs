@@ -53,7 +53,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledBloc
             }
             blocks
         }
-
+        
          Node::Heading(heading) => {
             let mut blocks = Vec::new();
             // Pass through to handle styling..
@@ -91,6 +91,7 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
         Node::List(list) => {
             let mut lines = Vec::new();
             let mut counter = list.start.unwrap_or(1);
+
             for child in &list.children {
                 if let Node::ListItem(item) = child {
                     for item_child in &item.children {
