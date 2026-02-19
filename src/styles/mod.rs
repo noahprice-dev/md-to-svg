@@ -56,6 +56,19 @@ pub enum StyledLine {
     Blank,
 }
 
+impl StyledLine {
+    pub fn get_type(&self) -> String {
+        match self {
+            StyledLine::Header { .. } => String::from("Header"),
+            StyledLine::BulletListItem {..} => String::from("Bullet List Item"),
+            StyledLine::NumberedListItem { .. } => String::from("Numbered List Item"),
+            StyledLine::Paragraph { .. } => String::from("Paragraph"),
+            StyledLine::Code { ..} => String::from("Code"),
+            StyledLine::Blank => String::from("Blank"),
+        }
+    }
+}
+
 // note: Strikethrough, Under/overline and other text decorations aren't supported in default Markdown and aren't showing in my node as unique text.
 // For now, I don't care to adapt these cases. However, they could likely be addded as further StyleContext cases later on.
 // ? it seems that these items are supported in GFM (Github Flavored Markdown) - for now, I would like to handle pure Markdown.
