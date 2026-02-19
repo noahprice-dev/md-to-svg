@@ -1,7 +1,4 @@
 use cosmic_text::{Style, Weight};
-use markdown::mdast::Node;
-use regex::{Regex, RegexSet};
-use std::{collections::HashMap, vec};
 
 
 

@@ -1,6 +1,6 @@
-use core::{num, panic};
-use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Style, Weight};
-use std::{char, collections::HashMap, fmt::format};
+use core::panic;
+use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Style, Weight};
+use std::{char, collections::HashMap};
 
 use crate::styles::{StyledBlock, StyledLine};
 
@@ -218,7 +218,7 @@ pub fn styled_line_to_layout(
 }
 
 // todo 
-fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
+pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
     let mut svg_elements = Vec::new();
     
     // Build byte position → segment mapping once
