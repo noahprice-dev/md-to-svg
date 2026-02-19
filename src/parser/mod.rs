@@ -1,18 +1,6 @@
-use cosmic_text::{BorrowedWithFontSystem, Buffer};
-use markdown::{ParseOptions, mdast::Node};
+use markdown::mdast::Node;
 
 use crate::styles::{StyleContext, StyledBlock, StyledLine};
-
-pub struct ParserContext<'buffer> {
-    pub buffer: &'buffer BorrowedWithFontSystem<'buffer, Buffer>,
-    pub options: ParseOptions,
-}
-
-impl ParserContext<'_> {
-    fn default(self) -> Self {
-        todo!()
-    }
-}
 
 fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledBlock> {
     match node {
@@ -53,8 +41,8 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledBloc
             }
             blocks
         }
-        
-         Node::Heading(heading) => {
+
+        Node::Heading(heading) => {
             let mut blocks = Vec::new();
             // Pass through to handle styling..
             for child in &heading.children {
@@ -66,10 +54,9 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledBloc
     }
 }
 
-
 pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
     // Check what type of Line Level block we are looking at.
-    match node {   
+    match node {
         Node::Root(root) => {
             let mut lines = Vec::new();
             for child in &root.children {
@@ -80,7 +67,10 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
         Node::Heading(heading) => {
             // * Process all inline styling of the Node
             let segments = parse_inline_styles(node, StyleContext::default());
-            vec![StyledLine::Header { segments, level: heading.depth }]
+            vec![StyledLine::Header {
+                segments,
+                level: heading.depth,
+            }]
         }
         Node::Paragraph(_) => {
             // * Process all inline styling of the Node
@@ -98,7 +88,8 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
                         match item_child {
                             Node::Paragraph(_) => {
                                 // * Parse inline styles
-                                let segments = parse_inline_styles(item_child, StyleContext::default());
+                                let segments =
+                                    parse_inline_styles(item_child, StyleContext::default());
                                 // * Handle Bullet List vs Numbered List
                                 if list.ordered {
                                     lines.push(StyledLine::NumberedListItem {

@@ -377,17 +377,6 @@ fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
     ranges
 }
 
-fn find_segment(byte_pos: usize, ranges: &Vec<SegmentRange>) -> Option<&SegmentRange> {
-    let mut found_range = None;
-    for range in ranges {
-        if range.start_byte <= byte_pos && byte_pos < range.end_byte {
-            found_range = Some(range);
-        } else {
-            found_range = None;
-        }
-    }
-    found_range
-}
 // [x] Extract layout from Cosmic Text buffers (buffer.layout_runs())
 // [x] Track y-positions as you stack lines vertically
 // [x] Apply x-offsets for indentation

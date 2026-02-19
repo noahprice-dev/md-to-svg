@@ -1,13 +1,5 @@
-use cosmic_text::Attrs;
-use cosmic_text::BorrowedWithFontSystem;
-use cosmic_text::Buffer;
-use cosmic_text::Family;
 use cosmic_text::FontSystem;
-use cosmic_text::Metrics;
-use cosmic_text::Shaping;
-use cosmic_text::skrifa::raw::tables::svg;
 use markdown::ParseOptions;
-use markdown::mdast::Node;
 use md_to_svg::layout::SvgConfig;
 use md_to_svg::layout::layout_line_to_svg;
 use md_to_svg::layout::styled_line_to_layout;
@@ -57,23 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(e) => panic!("Problem writing to {fp:?}: {e:?}")
         }
     }
+    writer.flush().expect("Should be able to flush BufWriter");
 
 
     Ok(())
-}
-
-//todo Move to output module? Layout?
-fn write_lines_to_file(asts: Vec<Node>) {
-    // get our file - note this will overwrite the contents each time
-    // currently it is desirable to do this. just be aware.
-    let fp = "./test_buffer_out.txt";
-    let file = File::create(fp).expect("Should be able to open file for writing.");
-
-    let mut writer = BufWriter::new(file);
-
-    for line in asts {
-        writeln!(writer, "{:#?}", line).unwrap();
-    }
-
-    writer.flush().unwrap();
 }
