@@ -7,7 +7,6 @@ use md_to_svg::parser::parse_blocks;
 use std::fs::File;
 use std::fs::{self};
 use std::io::{BufWriter, Write};
-use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let svg_cfg = SvgConfig::default();
@@ -23,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = ParseOptions::default();
     let full_md_ast = markdown::to_mdast(&raw_md, &opts).unwrap();
 
-    let mut svg_out: Vec<String> = Vec::new();
+    let mut svg_lines: Vec<String> = Vec::new();
 
     // * Handle processing
     if let Some(root_child) = full_md_ast.children() {
@@ -31,26 +30,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let styled_lines = parse_blocks(child, 0);
             for line in styled_lines {
                 let layout_line = styled_line_to_layout(&line, &mut font_system, &svg_cfg);
-                svg_out.extend(layout_line_to_svg(layout_line, &svg_cfg));
+                svg_lines.extend(layout_line_to_svg(layout_line, &svg_cfg));
             }
         }
     }
 
-    let fp = "./output.svg";
-    let outfile = File::create(Path::new("./output.svg")).expect(&format!(
+    write_svg_to_file("./outputs/test.svg", svg_lines, &svg_cfg);
+
+    Ok(())
+}
+
+fn write_svg_to_file(path: &str, lines: Vec<String>, cfg: &SvgConfig) {
+    //let fp = "./output.svg";
+    let outfile = File::create(path).expect(&format!(
         "Should be able to open or create a file at {}",
-        fp
+        path
     ));
 
     let mut writer = BufWriter::new(outfile);
-    for line in svg_out {
-        match writeln!(writer, "{}", line) {
-            Ok(_) => continue,
-            Err(e) => panic!("Problem writing to {fp:?}: {e:?}")
-        }
+    let prelude = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+    <svg
+    viewBox="0 0 {width:?} {height:?}"
+    width="{width:?}"
+    height="{height:?}"
+    version="1.1"
+    xmlns="http://www.w3.org/2000/svg">
+    <rect width="{width:?}" height="{height:?}" fill="{bg:}"/>"#,
+        width=cfg.width,
+        height=cfg.height,
+        bg=cfg.bg_color
+    );
+
+    let finish = r#"</svg>"#;
+    writeln!(writer, "{}", prelude).expect(&format!("Should be able to write to file at {}", path));
+    for line in lines{
+        writeln!(writer,"{}", line).expect(&format!("Should be able to write SVG Line to file at {}", path));
     }
+    writeln!(writer, "{}", finish).unwrap();
+    
     writer.flush().expect("Should be able to flush BufWriter");
-
-
-    Ok(())
 }

@@ -29,6 +29,8 @@ pub struct SvgConfig {
     pub header_scales: HashMap<u8, f32>,
     pub header_margin_top: f32,
     pub header_margin_bot: f32,
+
+    pub bg_color: String
 }
 pub struct LayoutLine {
     pub buffer: Buffer,
@@ -58,6 +60,7 @@ impl SvgConfig {
             ]),
             header_margin_top: 0.0,
             header_margin_bot: 0.0,
+            bg_color: String::from("#FFFFFF")
         }
     }
 }
@@ -326,10 +329,12 @@ pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
         let svg_line = tspans_to_svg(&tspans);
         svg_elements.push(svg_line);
     }
-    
     svg_elements
 }
 
+// TODO
+// 1. styled blocks do not have accurate whitespace between them (i.e. spaces before and after the word)
+// 2. Blocks are positioned in reverse order. (Handle global Y pos in layout_line_to_svgl)
 fn tspans_to_svg(tspans: &[TSpan]) -> String {
     let tspan_strings: Vec<String> = tspans.iter()
         .map(|ts| {
@@ -347,7 +352,7 @@ fn tspans_to_svg(tspans: &[TSpan]) -> String {
 
             // Return a formatted SVG String.
             format!(
-                r#"<tspan x-"{}" y="{}"{}{}>{}</tspan>"#,
+                r#"<tspan x="{}" y="{}"{}{}>{}</tspan>"#,
                 ts.x,
                 ts.y,
                 weight_attr,
@@ -357,7 +362,7 @@ fn tspans_to_svg(tspans: &[TSpan]) -> String {
         }).collect();
 
         // todo handle custom font-size & font family
-        format!(r#"<text font-family="sans-serif"" font-size="16">{}</text>"#, tspan_strings.join(""))
+        format!(r#"<text font-family="sans-serif" font-size="16">{}</text>"#, tspan_strings.join(""))
 }
 ///  Precompute the text range of our StyledBlock text as a byte range, which matches with the Cosmic Glyph start/end indices.
 fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
@@ -376,11 +381,6 @@ fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
     }
     ranges
 }
-
-// [x] Extract layout from Cosmic Text buffers (buffer.layout_runs())
-// [x] Track y-positions as you stack lines vertically
-// [x] Apply x-offsets for indentation
-// [x] Convert to SVG <text> and <tspan> elements
 
 fn html_escape(text: &str) -> String {
     text.replace('&', "&amp;")
