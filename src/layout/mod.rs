@@ -1,7 +1,6 @@
 use core::{num, panic};
 use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Shaping, Style, Weight};
 use std::{char, collections::HashMap, fmt::format};
-use unicode_segmentation::UnicodeSegmentation;
 
 use crate::styles::{StyledBlock, StyledLine};
 
@@ -219,7 +218,7 @@ pub fn styled_line_to_layout(
 }
 
 // todo 
-fn layout_line_to_tspan(layout: LayoutLine, cfg: &SvgConfig) -> Vec<TSpan> {
+fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
     let mut svg_elements = Vec::new();
     
     // Build byte position → segment mapping once
@@ -258,6 +257,7 @@ fn layout_line_to_tspan(layout: LayoutLine, cfg: &SvgConfig) -> Vec<TSpan> {
         let mut current_segment_idx: Option<usize> = None;
         let mut current_x = cfg.left_padding + layout.indent_offset;
         
+        // todo Could we shorten the range of our loop instead of validating we are in the right location?
         for glyph in run.glyphs.iter() {
             // Skip prefix glyphs (already handled above)
             if glyph.start < layout.prefix_len {
@@ -265,6 +265,7 @@ fn layout_line_to_tspan(layout: LayoutLine, cfg: &SvgConfig) -> Vec<TSpan> {
             }
             
             // Adjust byte position to account for prefix
+            // ! validate this
             let adjusted_byte_pos = glyph.start - layout.prefix_len;
             
             // Find which segment this glyph belongs to
@@ -321,14 +322,43 @@ fn layout_line_to_tspan(layout: LayoutLine, cfg: &SvgConfig) -> Vec<TSpan> {
         // ═══════════════════════════════════════════════════════
         // STEP 3: Convert TSpans to SVG string
         // ═══════════════════════════════════════════════════════
-        // let svg_line = tspans_to_svg(&tspans);
-        // svg_elements.push(svg_line);
+        // todo implement tspans to svg.
+        let svg_line = tspans_to_svg(&tspans);
+        svg_elements.push(svg_line);
     }
     
     svg_elements
 }
 
+fn tspans_to_svg(tspans: &[TSpan]) -> String {
+    let tspan_strings: Vec<String> = tspans.iter()
+        .map(|ts| {
+            let weight_attr = if ts.weight == Weight::BOLD {
+                r#" font-weight="bold" "#
+            } else {
+                ""
+            };
 
+            let style_attr = match ts.style {
+                Style::Italic => r#" font-style="italic""#,
+                Style::Oblique => r#" font-style="oblique""#,
+                Style::Normal => "",
+            };
+
+            // Return a formatted SVG String.
+            format!(
+                r#"<tspan x-"{}" y="{}"{}{}>{}</tspan>"#,
+                ts.x,
+                ts.y,
+                weight_attr,
+                style_attr,
+                html_escape(&ts.text)
+            )
+        }).collect();
+
+        // todo handle custom font-size & font family
+        format!(r#"<text font-family="sans-serif"" font-size="16">{}</text>"#, tspan_strings.join(""))
+}
 ///  Precompute the text range of our StyledBlock text as a byte range, which matches with the Cosmic Glyph start/end indices.
 fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
     let mut ranges = Vec::new();
@@ -358,7 +388,14 @@ fn find_segment(byte_pos: usize, ranges: &Vec<SegmentRange>) -> Option<&SegmentR
     }
     found_range
 }
-//Extract layout from Cosmic Text buffers (buffer.layout_runs())
-// Track y-positions as you stack lines vertically
-// Apply x-offsets for indentation
-// Convert to SVG <text> and <tspan> elements
+// [x] Extract layout from Cosmic Text buffers (buffer.layout_runs())
+// [x] Track y-positions as you stack lines vertically
+// [x] Apply x-offsets for indentation
+// [x] Convert to SVG <text> and <tspan> elements
+
+fn html_escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}

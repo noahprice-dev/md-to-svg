@@ -6,6 +6,7 @@ use std::{collections::HashMap, vec};
 
 
 #[derive(Debug, Clone)]
+// todo support strikethrough - this passes down to the SVG directly.
 pub struct StyledBlock {
     pub text: String,
     pub weight: Weight,
