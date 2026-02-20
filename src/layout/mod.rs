@@ -47,7 +47,7 @@ impl SvgConfig {
             right_padding: 0.0,
             bottom_padding: 0.0,
             left_padding: 0.0,
-            font_size: 16.0,
+            font_size: 16.0, 
             bullet_indent_em: 1.5,
             bullet_char: char::from_u32(0x2022).expect("Should be able to unwrap the character •"),
             header_scales: HashMap::from([
@@ -220,24 +220,43 @@ pub fn styled_line_to_layout(
     }
 }
 
-// todo 
-pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
+
+pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig, current_y: &mut f32) -> Vec<String> {
     let mut svg_elements = Vec::new();
     
     // Build byte position → segment mapping once
     let segment_ranges = build_segment_ranges(&layout.segments);
-    
+
+    if *current_y == 0.0 {
+        *current_y = cfg.top_padding;
+    }
     for run in layout.buffer.layout_runs() {
-        let line_y = cfg.top_padding + run.line_y;
+        println!("Height: {}", run.line_height);
+        println!("Y: {}", run.line_y);
+        println!("Top: {}", run.line_top);
+
+        // ? SVG text is centered on the BASELINE, roughly the middle of the entire text column.
+        // ? The Glyph positions fields from Cosmic reflect this in the following ways:
+        // * line_top = 0.0  ───────────────────  ← Top of text box
+        //                     ╔═══╗ ╔═══╗
+        //                     ║ A ║ ║ b ║  ← Ascenders
+        //                     ╠═══╣ ╠═══╣
+        // * line_y = 18.625 ──╩═══╩─╩═══╩──────  ← BASELINE
+        //                     ╝   ║          ← Descenders (like 'g', 'y', 'p')
+        //                         ╚═══╝
+        // * line_height = 24 ───────────────────  ← Bottom of line box
+        // ? However, the TOP and Y are dynamic values that are relative to the start of the 
+
+        let line_y = *current_y + run.line_y;
+
         let mut tspans = Vec::new();
         
-        // ═══════════════════════════════════════════════════════
-        // STEP 1: Handle prefix (if present in this run)
-        // ═══════════════════════════════════════════════════════
+        // ? Since we inserted our prefix, it isn't going to be part of our StyledSegment.
+        // ? Therefore we need to process & emit it separately.
         if layout.prefix_len > 0 {
             let mut prefix_text = String::new();
             
-            // Collect all glyphs that are part of the prefix
+            // * Collect all glyphs that are part of the prefix
             for glyph in run.glyphs.iter().take_while(|g| g.start < layout.prefix_len) {
                 prefix_text.push_str(&run.text[glyph.start..glyph.end]);
             }
@@ -251,7 +270,7 @@ pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
                     style: Style::Normal,
                 });
             }
-        }
+        } 
         
         // ═══════════════════════════════════════════════════════
         // STEP 2: Process content glyphs, grouping by segment
@@ -294,6 +313,7 @@ pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
                     });
                     
                     // Start new tspan for new segment
+                    // ! There is a significant breakdown here where the Y position and inline styling are breaking when we switch segments.
                     current_text.clear();
                     current_x = cfg.left_padding + layout.indent_offset + glyph.x;
                 }
@@ -321,20 +341,18 @@ pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig) -> Vec<String> {
                 });
             }
         }
-        
-        // ═══════════════════════════════════════════════════════
-        // STEP 3: Convert TSpans to SVG string
-        // ═══════════════════════════════════════════════════════
-        // todo implement tspans to svg.
+        // * Translate Tspans into raw SVG
         let svg_line = tspans_to_svg(&tspans);
         svg_elements.push(svg_line);
+
+        
+        *current_y += run.line_height;
     }
     svg_elements
 }
 
-// TODO
-// 1. styled blocks do not have accurate whitespace between them (i.e. spaces before and after the word)
-// 2. Blocks are positioned in reverse order. (Handle global Y pos in layout_line_to_svgl)
+
+/// Convert a `Tspan` into a raw SVG string wrapped by a <text> tag.
 fn tspans_to_svg(tspans: &[TSpan]) -> String {
     let tspan_strings: Vec<String> = tspans.iter()
         .map(|ts| {

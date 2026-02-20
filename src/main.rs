@@ -23,18 +23,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let full_md_ast = markdown::to_mdast(&raw_md, &opts).unwrap();
 
     let mut svg_lines: Vec<String> = Vec::new();
-
+    let mut current_height: f32 = 0.0;
     // * Handle processing
     if let Some(root_child) = full_md_ast.children() {
         for child in root_child {
             let styled_lines = parse_blocks(child, 0);
             for line in styled_lines {
                 let layout_line = styled_line_to_layout(&line, &mut font_system, &svg_cfg);
-                svg_lines.extend(layout_line_to_svg(layout_line, &svg_cfg));
+                svg_lines.extend(layout_line_to_svg(layout_line, &svg_cfg, &mut current_height));
             }
         }
     }
-
     write_svg_to_file("./outputs/test.svg", svg_lines, &svg_cfg);
 
     Ok(())
@@ -65,6 +64,7 @@ fn write_svg_to_file(path: &str, lines: Vec<String>, cfg: &SvgConfig) {
     let finish = r#"</svg>"#;
     writeln!(writer, "{}", prelude).expect(&format!("Should be able to write to file at {}", path));
     for line in lines{
+        println!("raw line: {:#?}", line);
         writeln!(writer,"{}", line).expect(&format!("Should be able to write SVG Line to file at {}", path));
     }
     writeln!(writer, "{}", finish).unwrap();
