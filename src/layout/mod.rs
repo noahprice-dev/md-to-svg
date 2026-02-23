@@ -23,6 +23,10 @@ pub struct SvgConfig {
     // todo expose this as an option to the end user?
     // todo  Explain default is sans-serif.
     //pub font_family: Family,
+    /// Space between discrete text blocks.
+    pub line_height_factor: f32,
+    /// Space between lines inside of a paragraph.
+    pub paragraph_spacing_em: f32,
 
     // Bullet Style Options
     pub bullet_indent_em: f32, // default 1.5 or 2.0 ->
@@ -35,13 +39,7 @@ pub struct SvgConfig {
 
     pub bg_color: String,
 }
-#[derive(Debug)]
-pub struct LayoutLine {
-    pub buffer: Buffer,
-    pub segments: Vec<StyledBlock>,
-    pub prefix_len: usize,
-    pub indent_offset: f32,
-}
+
 impl SvgConfig {
     pub fn default() -> Self {
         SvgConfig {
@@ -52,6 +50,8 @@ impl SvgConfig {
             bottom_padding: 0.0,
             left_padding: 0.0,
             font_size: 16.0,
+            line_height_factor: 1.5,
+            paragraph_spacing_em: 0.8,
             bullet_indent_em: 1.5,
             bullet_char: char::from_u32(0x2022).expect("Should be able to unwrap the character •"),
             header_scales: HashMap::from([
@@ -67,6 +67,22 @@ impl SvgConfig {
             bg_color: String::from("#FFFFFF"),
         }
     }
+    /// Space between discrete text blocks.
+    pub const fn line_height(&self) -> f32 {
+        self.font_size * self.line_height_factor
+    }
+    /// Space between lines inside of a paragraph.
+    pub const fn paragraph_spacing(&self) -> f32 {
+        self.font_size * self.paragraph_spacing_em
+    }
+}
+
+#[derive(Debug)]
+pub struct LayoutLine {
+    pub buffer: Buffer,
+    pub segments: Vec<StyledBlock>,
+    pub prefix_len: usize,
+    pub indent_offset: f32,
 }
 
 pub struct SegmentRange {
@@ -87,7 +103,7 @@ pub fn styled_line_to_layout(
     line: &StyledLine,
     font_system: &mut FontSystem,
     cfg: &SvgConfig,
-) -> LayoutLine {
+) -> Option<LayoutLine> {
     // * Arrange our default available width based on the overall SVG size minus any L/R padding.
     let mut available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
 
@@ -95,7 +111,7 @@ pub fn styled_line_to_layout(
         StyledLine::Paragraph { segments } => {
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.font_size, cfg.font_size * 1.5),
+                Metrics::new(cfg.font_size, cfg.line_height()),
             );
             let rich_text: Vec<(&str, Attrs<'_>)> = segments
                 .iter()
@@ -116,27 +132,22 @@ pub fn styled_line_to_layout(
             );
             buffer.set_size(font_system, Some(cfg.width), Some(f32::MAX));
 
-            // buffer.lines.iter().enumerate().for_each(|(i, line)| {
-            //     println!("Line {} | Text: {}", i, line.clone().into_text());
-            //     println!("Line {} | Text: {:#?}", i, line.attrs_list().spans());
-            // });
-
-            LayoutLine {
+            Some(LayoutLine {
                 buffer,
                 segments: segments.clone(),
                 prefix_len: 0,
                 indent_offset: 0.0,
-            }
+            })
         }
         StyledLine::Header { segments, level } => {
             // ? Depending on the Header indentation, we will need to increase the size of our font.
             // ? We store the multipler in a hash-table in our config.
             let scaled_font_size =
-                cfg.font_size * cfg.header_scales.get(level).copied().unwrap_or(1.0);
+                cfg.font_size * cfg.header_scales[level];
 
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(scaled_font_size, scaled_font_size * 1.5),
+                Metrics::new(scaled_font_size, scaled_font_size * cfg.line_height_factor),
             );
 
             let rich_text: Vec<(&str, Attrs<'_>)> = segments
@@ -161,12 +172,12 @@ pub fn styled_line_to_layout(
 
             buffer.set_size(font_system, Some(cfg.width), Some(f32::MAX));
 
-            LayoutLine {
+            Some(LayoutLine {
                 buffer,
                 segments: segments.clone(),
                 prefix_len: 0,
                 indent_offset: 0.0,
-            }
+            })
         }
         StyledLine::BulletListItem { segments, indent } => {
             let mut buffer = Buffer::new(
@@ -218,18 +229,24 @@ pub fn styled_line_to_layout(
 
             buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
 
-            LayoutLine {
+            Some(LayoutLine {
                 buffer,
                 segments: segments.clone(),
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
-            }
+            })
         }
-        _ => panic! {"Type not yet implemented! {:#?}", &line.get_type()},
+        StyledLine::Blank => None,
+
+        _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
     }
 }
 
-pub fn process_layouts(layouts: Vec<LayoutLine>, cfg: &SvgConfig, starting_y: f32) -> Vec<String> {
+pub fn process_layouts(
+    layouts: Vec<Option<LayoutLine>>,
+    cfg: &SvgConfig,
+    starting_y: f32,
+) -> (Vec<String>, f32) {
     // * Return value
     let mut svg_lines: Vec<String> = Vec::new();
 
@@ -243,56 +260,63 @@ pub fn process_layouts(layouts: Vec<LayoutLine>, cfg: &SvgConfig, starting_y: f3
     for layout in layouts {
         let (svgs, updated_y) = process_layout_line(layout, cumulative_y_offset, cfg);
         svg_lines.extend(svgs);
-
+        // insert a line break
         cumulative_y_offset += updated_y;
     }
 
     // Return final SVG collection.
-    svg_lines
+    (svg_lines, cumulative_y_offset)
 }
 
 /// y_cursor == Padding or other start offset.
-fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (Vec<String>, f32) {
+fn process_layout_line(
+    layout: Option<LayoutLine>,
+    y_cursor: f32,
+    cfg: &SvgConfig,
+) -> (Vec<String>, f32) {
     let mut svg_elements: Vec<String> = Vec::new();
-    // * Build our Segment Map for this LayoutLine.
-    let segment_ranges = build_segment_ranges(&layout.segments);
-
     let mut cumulative_y = y_cursor;
-    let mut cumulative_byte_offset: usize = 0;
-
-    // * For each run in our buffer, we need to process it in a few ways:
-    // * 1. Check if there is a prefix on this run.
-    // * Since prefixes are stripped at the time we parse the AST, we inserted it when we transform into a Styled Line.
-    // * Therefore we need to handle it separately here.
-    // * 2. Check if the new character we are processing belongs to a different segment
-    // * 3. If there has been a change, crunch the previous characters as a TSPAN with the styles in that segment, and start a new string buffer.
-    // * 4. Update the Y positions
-    // * 5. Add the run to our output buffer.
-    for (run_idx, run) in layout.buffer.layout_runs().enumerate() {
-        let baseline_y = y_cursor + run.line_y;
-
-        let (tspans, bytes_in_run, updated_y) = process_run(
-            run,
-            &segment_ranges,
-            &layout.segments,
-            layout.prefix_len,
-            cumulative_byte_offset,
-            baseline_y,
-            cfg,
-            layout.indent_offset,
-        );
-        println!("Run #{}", run_idx);
-
-        svg_elements.push(tspans_to_svg(&tspans));
-        // cumulative_byte_offset += bytes_in_run;
-        cumulative_y += updated_y;
+    let cumulative_byte_offset: usize = 0;
+    if let Some(lyt) = layout {
+        // * Build our Segment Map for this LayoutLine.
+        let segment_ranges = build_segment_ranges(&lyt.segments);
+        
+        // * For each run in our buffer, we need to process it in a few ways:
+        // * 1. Check if there is a prefix on this run.
+        // * Since prefixes are stripped at the time we parse the AST, we inserted it when we transform into a Styled Line.
+        // * Therefore we need to handle it separately here.
+        // * 2. Check if the new character we are processing belongs to a different segment
+        // * 3. If there has been a change, crunch the previous characters as a TSPAN with the styles in that segment, and start a new string buffer.
+        // * 4. Update the Y positions
+        // * 5. Add the run to our output buffer.
+        for (run_idx, run) in lyt.buffer.layout_runs().enumerate() {
+            let baseline_y = y_cursor + run.line_y;
+            println!("RunID: {} | Run: Text: {}", run_idx, run.text);
+            let tspans = process_run(
+                &run,
+                &segment_ranges,
+                &lyt.segments,
+                lyt.prefix_len,
+                cumulative_byte_offset,
+                baseline_y,
+                cfg,
+                lyt.indent_offset,
+            );
+            //println!("Run #{}", run_idx);
+            svg_elements.push(tspans_to_svg(&tspans));
+            // cumulative_byte_offset += bytes_in_run;
+            cumulative_y += cfg.paragraph_spacing();
+        }
+    } else {
+        // Blank line - increase cursor anyway
+        cumulative_y += cfg.line_height();
     }
-
+    // ! What happens if we extend an empty vec to an existing vec?
     (svg_elements, cumulative_y)
 }
 
 fn process_run(
-    run: LayoutRun,
+    run: &LayoutRun,
     segment_ranges: &Vec<SegmentRange>,
     segments: &Vec<StyledBlock>,
     prefix_len: usize,
@@ -300,7 +324,7 @@ fn process_run(
     y_cursor: f32,
     cfg: &SvgConfig,
     indent_offset: f32,
-) -> (Vec<TSpan>, usize, f32) {
+) -> (Vec<TSpan>) {
     let mut tspans: Vec<TSpan> = vec![];
     // * Handle prefixes
     // ? Since we inserted our prefix, it isn't going to be part of our StyledSegment.
@@ -334,10 +358,10 @@ fn process_run(
         if glyph.start < prefix_len {
             continue; // Skip prefix glyphs
         }
-        println!("Byte Offset: {}", byte_offset);
-        // Adjust the starting byte position to account for the prefix.
+
+        // Adjust the starting byte position to account for the prefix & our prior glyphs in the run.
         let adjusted_byte_pos = (glyph.start - prefix_len) + byte_offset;
-        println!("Adjusted Byte Pos: {}", adjusted_byte_pos);
+
         // Find which segment this glyph belongs to.
         let segment_idx = segment_ranges
             .iter()
@@ -349,8 +373,6 @@ fn process_run(
                 "Should be able to find a glyph at index {}.",
                 adjusted_byte_pos
             ));
-
-
 
         // Check if we have moved into a different segment.
         if let Some(prev_idx) = current_segment_idx {
@@ -374,18 +396,10 @@ fn process_run(
             // We haven't added a content glyph yet, so start.
             current_x = cfg.left_padding + indent_offset + glyph.x;
         }
-        println!("Segment:{}", segments[segment_idx].text);
-        println!(
-            "Glyph {}|{} at byte offset {}",
-            run.text.chars().nth(glyph.start).unwrap(),
-            glyph.start,
-            adjusted_byte_pos
-        );
+
         // Add this glyph to our text buffer.
         let ch = &run.text[glyph.start..glyph.end];
         current_text.push_str(ch);
-        println!("current_text: {}", current_text);
-        println!("---");
         current_segment_idx = Some(segment_idx);
     }
 
@@ -403,7 +417,7 @@ fn process_run(
         }
     }
 
-    (tspans, run.text.len(), y_cursor)
+    tspans
 }
 
 /// Convert a `Tspan` into a raw SVG string wrapped by a <text> tag.
@@ -450,8 +464,8 @@ fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
     for (seg_idx, segment) in segments.iter().enumerate() {
         // todo ? Do we need to replace these characters here, or is there somewhere sooner we can handle it after the Cosmic shaping.
         let seg_len = segment.text.replace("\r\n", "").len();
-        println!("Segment Length: {}", seg_len);
-        println!("Segment Text: {}", segment.text);
+        // println!("Segment Length: {}", seg_len);
+        // println!("Segment Text: {}", segment.text);
 
         ranges.push(SegmentRange {
             segment_idx: seg_idx,
