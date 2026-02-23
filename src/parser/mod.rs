@@ -45,6 +45,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledBloc
         Node::Heading(heading) => {
             let mut blocks = Vec::new();
             // Pass through to handle styling..
+            context.bold = true;
             for child in &heading.children {
                 blocks.extend(parse_inline_styles(child, context));
             }
