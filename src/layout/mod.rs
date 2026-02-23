@@ -268,7 +268,6 @@ pub fn process_layouts(
     (svg_lines, cumulative_y_offset)
 }
 
-/// y_cursor == Padding or other start offset.
 fn process_layout_line(
     layout: Option<LayoutLine>,
     y_cursor: f32,

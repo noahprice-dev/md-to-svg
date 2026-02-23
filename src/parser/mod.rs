@@ -41,7 +41,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledBloc
             }
             blocks
         }
-
+        
         Node::Heading(heading) => {
             let mut blocks = Vec::new();
             // Pass through to handle styling..
@@ -50,7 +50,12 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledBloc
             }
             blocks
         }
-        _ => panic!("Type not yet implemented: {:?} ", node),
+        
+        Node::Break(_) => {
+            todo!()
+        }
+
+        _ => panic!("InlineStyle Type not yet implemented: {:?} ", node),
     }
 }
 
@@ -115,8 +120,7 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             }
             lines
         }
-        _ => {
-            panic!("Type not yet implemented: {:?} ", node)
-        }
+
+        _=>panic!("ParseBlocks has not yet implemented: {:?} ", node)
     }
 }

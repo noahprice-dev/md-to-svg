@@ -1,5 +1,4 @@
 use cosmic_text::FontSystem;
-use cosmic_text::skrifa::raw::tables::layout;
 use markdown::ParseOptions;
 use md_to_svg::layout::SvgConfig;
 use md_to_svg::layout::process_layouts;
@@ -27,8 +26,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut current_height: f32 = 0.0;
     let mut layout_lines = Vec::new();
     // * Handle processing
+    
+    // todo Refactor to a function
+    // todo fix height being updated iteratively.
     if let Some(root_child) = full_md_ast.children() {
         for child in root_child {
+            
             for style_line in parse_blocks(child, 0) {
                 layout_lines.push(styled_line_to_layout(
                     &style_line,
@@ -38,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    
     let (svgs, new_height) = process_layouts(layout_lines, &svg_cfg, current_height);
     println!("Height: {}", current_height);
     current_height += new_height;
