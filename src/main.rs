@@ -1,7 +1,8 @@
 use cosmic_text::FontSystem;
+use cosmic_text::skrifa::raw::tables::layout;
 use markdown::ParseOptions;
 use md_to_svg::layout::SvgConfig;
-use md_to_svg::layout::layout_line_to_svg;
+use md_to_svg::layout::process_layouts;
 use md_to_svg::layout::styled_line_to_layout;
 use md_to_svg::parser::parse_blocks;
 use std::fs::File;
@@ -28,12 +29,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(root_child) = full_md_ast.children() {
         for child in root_child {
             let styled_lines = parse_blocks(child, 0);
-            for line in styled_lines {
-                let layout_line = styled_line_to_layout(&line, &mut font_system, &svg_cfg);
-                svg_lines.extend(layout_line_to_svg(layout_line, &svg_cfg, &mut current_height));
+            for style_line in styled_lines {
+                let mut layout_lines = Vec::new();
+                layout_lines.push(styled_line_to_layout(&style_line, &mut font_system, &svg_cfg));
+                svg_lines.extend(process_layouts(layout_lines, &svg_cfg, 0.0));
+                }
             }
         }
-    }
+    
+
     write_svg_to_file("./outputs/test.svg", svg_lines, &svg_cfg);
 
     Ok(())
@@ -56,18 +60,20 @@ fn write_svg_to_file(path: &str, lines: Vec<String>, cfg: &SvgConfig) {
     version="1.1"
     xmlns="http://www.w3.org/2000/svg">
     <rect width="{width:?}" height="{height:?}" fill="{bg:}"/>"#,
-        width=cfg.width,
-        height=cfg.height,
-        bg=cfg.bg_color
+        width = cfg.width,
+        height = cfg.height,
+        bg = cfg.bg_color
     );
 
     let finish = r#"</svg>"#;
     writeln!(writer, "{}", prelude).expect(&format!("Should be able to write to file at {}", path));
-    for line in lines{
-        println!("raw line: {:#?}", line);
-        writeln!(writer,"{}", line).expect(&format!("Should be able to write SVG Line to file at {}", path));
+    for line in lines {
+        writeln!(writer, "{}", line).expect(&format!(
+            "Should be able to write SVG Line to file at {}",
+            path
+        ));
     }
     writeln!(writer, "{}", finish).unwrap();
-    
+
     writer.flush().expect("Should be able to flush BufWriter");
 }

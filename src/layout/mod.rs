@@ -1,6 +1,9 @@
 use core::panic;
-use cosmic_text::{Attrs, Buffer, Family, FontSystem, Metrics, Style, Weight};
-use std::{char, collections::HashMap};
+use cosmic_text::{
+    Attrs, Buffer, Family, FontSystem, LayoutRun, Metrics, Style, Weight,
+    skrifa::raw::tables::svg::{self, Svg},
+};
+use std::{char, collections::HashMap, thread::current};
 
 use crate::styles::{StyledBlock, StyledLine};
 
@@ -30,8 +33,9 @@ pub struct SvgConfig {
     pub header_margin_top: f32,
     pub header_margin_bot: f32,
 
-    pub bg_color: String
+    pub bg_color: String,
 }
+#[derive(Debug)]
 pub struct LayoutLine {
     pub buffer: Buffer,
     pub segments: Vec<StyledBlock>,
@@ -47,7 +51,7 @@ impl SvgConfig {
             right_padding: 0.0,
             bottom_padding: 0.0,
             left_padding: 0.0,
-            font_size: 16.0, 
+            font_size: 16.0,
             bullet_indent_em: 1.5,
             bullet_char: char::from_u32(0x2022).expect("Should be able to unwrap the character •"),
             header_scales: HashMap::from([
@@ -60,7 +64,7 @@ impl SvgConfig {
             ]),
             header_margin_top: 0.0,
             header_margin_bot: 0.0,
-            bg_color: String::from("#FFFFFF")
+            bg_color: String::from("#FFFFFF"),
         }
     }
 }
@@ -111,6 +115,11 @@ pub fn styled_line_to_layout(
                 None,
             );
             buffer.set_size(font_system, Some(cfg.width), Some(f32::MAX));
+
+            // buffer.lines.iter().enumerate().for_each(|(i, line)| {
+            //     println!("Line {} | Text: {}", i, line.clone().into_text());
+            //     println!("Line {} | Text: {:#?}", i, line.attrs_list().spans());
+            // });
 
             LayoutLine {
                 buffer,
@@ -220,141 +229,187 @@ pub fn styled_line_to_layout(
     }
 }
 
+pub fn process_layouts(layouts: Vec<LayoutLine>, cfg: &SvgConfig, starting_y: f32) -> Vec<String> {
+    // * Return value
+    let mut svg_lines: Vec<String> = Vec::new();
 
-pub fn layout_line_to_svg(layout: LayoutLine, cfg: &SvgConfig, current_y: &mut f32) -> Vec<String> {
-    let mut svg_elements = Vec::new();
-    
-    // Build byte position → segment mapping once
-    let segment_ranges = build_segment_ranges(&layout.segments);
+    // * Store mutuable vars for our moving offsets.
+    let mut cumulative_y_offset = starting_y;
 
-    if *current_y == 0.0 {
-        *current_y = cfg.top_padding;
+    // For each layout in our document,
+    // Process it into an SVG.
+    // The returned values are the formatted SVG, and the last character index in the line and the current Y offset.
+    // We use this offset to start looking through format segments, as our Run.glyph.start values will reset each run.
+    for layout in layouts {
+        let (svgs, updated_y) = process_layout_line(layout, cumulative_y_offset, cfg);
+        svg_lines.extend(svgs);
+
+        cumulative_y_offset += updated_y;
     }
-    for run in layout.buffer.layout_runs() {
-        println!("Height: {}", run.line_height);
-        println!("Y: {}", run.line_y);
-        println!("Top: {}", run.line_top);
 
-        // ? SVG text is centered on the BASELINE, roughly the middle of the entire text column.
-        // ? The Glyph positions fields from Cosmic reflect this in the following ways:
-        // * line_top = 0.0  ───────────────────  ← Top of text box
-        //                     ╔═══╗ ╔═══╗
-        //                     ║ A ║ ║ b ║  ← Ascenders
-        //                     ╠═══╣ ╠═══╣
-        // * line_y = 18.625 ──╩═══╩─╩═══╩──────  ← BASELINE
-        //                     ╝   ║          ← Descenders (like 'g', 'y', 'p')
-        //                         ╚═══╝
-        // * line_height = 24 ───────────────────  ← Bottom of line box
-        // ? However, the TOP and Y are dynamic values that are relative to the start of the 
-
-        let line_y = *current_y + run.line_y;
-
-        let mut tspans = Vec::new();
-        
-        // ? Since we inserted our prefix, it isn't going to be part of our StyledSegment.
-        // ? Therefore we need to process & emit it separately.
-        if layout.prefix_len > 0 {
-            let mut prefix_text = String::new();
-            
-            // * Collect all glyphs that are part of the prefix
-            for glyph in run.glyphs.iter().take_while(|g| g.start < layout.prefix_len) {
-                prefix_text.push_str(&run.text[glyph.start..glyph.end]);
-            }
-            
-            if !prefix_text.is_empty() {
-                tspans.push(TSpan {
-                    text: prefix_text,
-                    x: cfg.left_padding + layout.indent_offset,
-                    y: line_y,
-                    weight: Weight::NORMAL,
-                    style: Style::Normal,
-                });
-            }
-        } 
-        
-        // ═══════════════════════════════════════════════════════
-        // STEP 2: Process content glyphs, grouping by segment
-        // ═══════════════════════════════════════════════════════
-        let mut current_text = String::new();
-        let mut current_segment_idx: Option<usize> = None;
-        let mut current_x = cfg.left_padding + layout.indent_offset;
-        
-        // todo Could we shorten the range of our loop instead of validating we are in the right location?
-        for glyph in run.glyphs.iter() {
-            // Skip prefix glyphs (already handled above)
-            if glyph.start < layout.prefix_len {
-                continue;
-            }
-            
-            // Adjust byte position to account for prefix
-            // ! validate this
-            let adjusted_byte_pos = glyph.start - layout.prefix_len;
-            
-            // Find which segment this glyph belongs to
-            let segment_idx = segment_ranges.iter()
-                .find(|range| {
-                    adjusted_byte_pos >= range.start_byte 
-                    && adjusted_byte_pos < range.end_byte
-                })
-                .map(|range| range.segment_idx)
-                .unwrap_or(0);  // Fallback to first segment
-            
-            // Check if we've moved to a different segment
-            if let Some(prev_idx) = current_segment_idx {
-                if prev_idx != segment_idx {
-                    // Emit the accumulated tspan for previous segment
-                    let prev_segment = &layout.segments[prev_idx];
-                    tspans.push(TSpan {
-                        text: current_text.clone(),
-                        x: current_x,
-                        y: line_y,
-                        weight: prev_segment.weight,
-                        style: prev_segment.style,
-                    });
-                    
-                    // Start new tspan for new segment
-                    // ! There is a significant breakdown here where the Y position and inline styling are breaking when we switch segments.
-                    current_text.clear();
-                    current_x = cfg.left_padding + layout.indent_offset + glyph.x;
-                }
-            } else {
-                // First content glyph - set initial x position
-                current_x = cfg.left_padding + layout.indent_offset + glyph.x;
-            }
-            
-            // Accumulate this glyph's character(s)
-            let ch = &run.text[glyph.start..glyph.end];
-            current_text.push_str(ch);
-            current_segment_idx = Some(segment_idx);
-        }
-        
-        // Emit final tspan (if any content was accumulated)
-        if !current_text.is_empty() {
-            if let Some(seg_idx) = current_segment_idx {
-                let segment = &layout.segments[seg_idx];
-                tspans.push(TSpan {
-                    text: current_text,
-                    x: current_x,
-                    y: line_y,
-                    weight: segment.weight,
-                    style: segment.style,
-                });
-            }
-        }
-        // * Translate Tspans into raw SVG
-        let svg_line = tspans_to_svg(&tspans);
-        svg_elements.push(svg_line);
-
-        
-        *current_y += run.line_height;
-    }
-    svg_elements
+    // Return final SVG collection.
+    svg_lines
 }
 
+/// y_cursor == Padding or other start offset.
+fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (Vec<String>, f32) {
+    let mut svg_elements: Vec<String> = Vec::new();
+    // * Build our Segment Map for this LayoutLine.
+    let segment_ranges = build_segment_ranges(&layout.segments);
+
+    let mut cumulative_y = y_cursor;
+    let mut cumulative_byte_offset: usize = 0;
+
+    // * For each run in our buffer, we need to process it in a few ways:
+    // * 1. Check if there is a prefix on this run.
+    // * Since prefixes are stripped at the time we parse the AST, we inserted it when we transform into a Styled Line.
+    // * Therefore we need to handle it separately here.
+    // * 2. Check if the new character we are processing belongs to a different segment
+    // * 3. If there has been a change, crunch the previous characters as a TSPAN with the styles in that segment, and start a new string buffer.
+    // * 4. Update the Y positions
+    // * 5. Add the run to our output buffer.
+    for (run_idx, run) in layout.buffer.layout_runs().enumerate() {
+        let baseline_y = y_cursor + run.line_y;
+
+        let (tspans, bytes_in_run, updated_y) = process_run(
+            run,
+            &segment_ranges,
+            &layout.segments,
+            layout.prefix_len,
+            cumulative_byte_offset,
+            baseline_y,
+            cfg,
+            layout.indent_offset,
+        );
+        println!("Run #{}", run_idx);
+
+        svg_elements.push(tspans_to_svg(&tspans));
+        // cumulative_byte_offset += bytes_in_run;
+        cumulative_y += updated_y;
+    }
+
+    (svg_elements, cumulative_y)
+}
+
+fn process_run(
+    run: LayoutRun,
+    segment_ranges: &Vec<SegmentRange>,
+    segments: &Vec<StyledBlock>,
+    prefix_len: usize,
+    byte_offset: usize,
+    y_cursor: f32,
+    cfg: &SvgConfig,
+    indent_offset: f32,
+) -> (Vec<TSpan>, usize, f32) {
+    let mut tspans: Vec<TSpan> = vec![];
+    // * Handle prefixes
+    // ? Since we inserted our prefix, it isn't going to be part of our StyledSegment.
+    // ? Therefore we need to process & emit it separately.
+    if prefix_len > 0 && byte_offset == 0 {
+        let mut prefix_text = String::new();
+
+        // * Collect all glyphs that are part of the prefix
+        for glyph in run.glyphs.iter().take_while(|g| g.start < prefix_len) {
+            prefix_text.push_str(&run.text[glyph.start..glyph.end]);
+        }
+
+        if !prefix_text.is_empty() {
+            tspans.push(TSpan {
+                text: prefix_text,
+                x: cfg.left_padding + indent_offset,
+                y: y_cursor,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+            });
+        }
+    }
+
+    let mut current_text: String = String::new(); // * Create a string buffer that holds all characters in a given segment range.
+    let mut current_segment_idx: Option<usize> = None;
+    let mut current_x = cfg.left_padding + indent_offset; // handle starting offset for the line of text.
+
+    // * Start investigating all 'glyphs' - or Unicode Codepoints.
+    // ? It is important to note these are not necessarily entire characters or grapheme clusters.
+    for glyph in run.glyphs.iter() {
+        if glyph.start < prefix_len {
+            continue; // Skip prefix glyphs
+        }
+        println!("Byte Offset: {}", byte_offset);
+        // Adjust the starting byte position to account for the prefix.
+        let adjusted_byte_pos = (glyph.start - prefix_len) + byte_offset;
+        println!("Adjusted Byte Pos: {}", adjusted_byte_pos);
+        // Find which segment this glyph belongs to.
+        let segment_idx = segment_ranges
+            .iter()
+            .find(|range| {
+                adjusted_byte_pos >= range.start_byte && adjusted_byte_pos <= range.end_byte
+            })
+            .map(|range| range.segment_idx)
+            .expect(&format!(
+                "Should be able to find a glyph at index {}.",
+                adjusted_byte_pos
+            ));
+
+
+
+        // Check if we have moved into a different segment.
+        if let Some(prev_idx) = current_segment_idx {
+            if prev_idx != segment_idx {
+                // Emit the accumulated text as a TSpan with styling from the previous segment.
+                let prev_segment = &segments[prev_idx];
+
+                tspans.push(TSpan {
+                    text: current_text.clone(),
+                    x: current_x,
+                    y: y_cursor,
+                    weight: prev_segment.weight,
+                    style: prev_segment.style,
+                });
+
+                // Reset text buffer and update our X to move inline with all previous characters.
+                current_text.clear();
+                current_x = cfg.left_padding + indent_offset + glyph.x;
+            }
+        } else {
+            // We haven't added a content glyph yet, so start.
+            current_x = cfg.left_padding + indent_offset + glyph.x;
+        }
+        println!("Segment:{}", segments[segment_idx].text);
+        println!(
+            "Glyph {}|{} at byte offset {}",
+            run.text.chars().nth(glyph.start).unwrap(),
+            glyph.start,
+            adjusted_byte_pos
+        );
+        // Add this glyph to our text buffer.
+        let ch = &run.text[glyph.start..glyph.end];
+        current_text.push_str(ch);
+        println!("current_text: {}", current_text);
+        println!("---");
+        current_segment_idx = Some(segment_idx);
+    }
+
+    // At the end of the run, if we have any text remaining in our buffer, crunch it.
+    if !current_text.is_empty() {
+        if let Some(seg_idx) = current_segment_idx {
+            let segment = &segments[seg_idx];
+            tspans.push(TSpan {
+                text: current_text.clone(),
+                x: current_x,
+                y: y_cursor,
+                weight: segment.weight,
+                style: segment.style,
+            });
+        }
+    }
+
+    (tspans, run.text.len(), y_cursor)
+}
 
 /// Convert a `Tspan` into a raw SVG string wrapped by a <text> tag.
 fn tspans_to_svg(tspans: &[TSpan]) -> String {
-    let tspan_strings: Vec<String> = tspans.iter()
+    let tspan_strings: Vec<String> = tspans
+        .iter()
         .map(|ts| {
             let weight_attr = if ts.weight == Weight::BOLD {
                 r#" font-weight="bold" "#
@@ -377,10 +432,14 @@ fn tspans_to_svg(tspans: &[TSpan]) -> String {
                 style_attr,
                 html_escape(&ts.text)
             )
-        }).collect();
+        })
+        .collect();
 
-        // todo handle custom font-size & font family
-        format!(r#"<text font-family="sans-serif" font-size="16">{}</text>"#, tspan_strings.join(""))
+    // todo handle custom font-size & font family
+    format!(
+        r#"<text font-family="sans-serif" font-size="16">{}</text>"#,
+        tspan_strings.join("")
+    )
 }
 ///  Precompute the text range of our StyledBlock text as a byte range, which matches with the Cosmic Glyph start/end indices.
 fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
@@ -389,11 +448,15 @@ fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
     let mut current_pos = 0;
 
     for (seg_idx, segment) in segments.iter().enumerate() {
-        let seg_len = segment.text.len();
+        // todo ? Do we need to replace these characters here, or is there somewhere sooner we can handle it after the Cosmic shaping.
+        let seg_len = segment.text.replace("\r\n", "").len();
+        println!("Segment Length: {}", seg_len);
+        println!("Segment Text: {}", segment.text);
+
         ranges.push(SegmentRange {
             segment_idx: seg_idx,
             start_byte: current_pos,
-            end_byte: current_pos + seg_len,
+            end_byte: current_pos + seg_len - 1,
         });
         current_pos += seg_len
     }
