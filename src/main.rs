@@ -12,31 +12,37 @@ use std::io::{BufWriter, Write};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let svg_cfg = SvgConfig::default();
 
-    // Detect system fonts
+    // * Detect system fonts
     let mut font_system = FontSystem::new();
 
     // * Read in our Markdown.
     let raw_md = fs::read_to_string("./test.md").unwrap();
 
-    // ? ParseOptions modifies how to parse different flavours of markdown, and which flavours to support.
+    // * ParseOptions modifies how to parse different flavours of markdown, and which flavours to support.
     // todo Right now we just handle vanilla. We could expand into GFM later.
     let opts = ParseOptions::default();
     let full_md_ast = markdown::to_mdast(&raw_md, &opts).unwrap();
 
     let mut svg_lines: Vec<String> = Vec::new();
     let mut current_height: f32 = 0.0;
+    let mut layout_lines = Vec::new();
     // * Handle processing
     if let Some(root_child) = full_md_ast.children() {
         for child in root_child {
-            let styled_lines = parse_blocks(child, 0);
-            for style_line in styled_lines {
-                let mut layout_lines = Vec::new();
-                layout_lines.push(styled_line_to_layout(&style_line, &mut font_system, &svg_cfg));
-                svg_lines.extend(process_layouts(layout_lines, &svg_cfg, 0.0));
-                }
+            for style_line in parse_blocks(child, 0) {
+                layout_lines.push(styled_line_to_layout(
+                    &style_line,
+                    &mut font_system,
+                    &svg_cfg,
+                ));
             }
         }
-    
+    }
+    let (svgs, new_height) = process_layouts(layout_lines, &svg_cfg, current_height);
+    println!("Height: {}", current_height);
+    current_height += new_height;
+    println!("Adj. Height: {}", current_height);
+    svg_lines.extend(svgs);
 
     write_svg_to_file("./outputs/test.svg", svg_lines, &svg_cfg);
 
