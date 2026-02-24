@@ -1,10 +1,11 @@
-use core::panic;
+use core::{f32, num, panic};
 use cosmic_text::{
-    Attrs, Buffer, Family, FontSystem, LayoutRun, Metrics, Style, Weight, skrifa::{font, raw::tables::base},
+    Attrs, Buffer, Family, FontSystem, LayoutRun, Metrics, Style, Weight,
+    skrifa::{font, raw::tables::base},
 };
 use std::{char, collections::HashMap};
 
-use crate::styles::{StyledBlock, StyledLine};
+use crate::styles::{StyledBlock, StyledLine, StyledSegment};
 
 pub struct SvgConfig {
     // SVG Canvas Options
@@ -49,8 +50,8 @@ impl SvgConfig {
             bottom_padding: 0.0,
             left_padding: 0.0,
             font_size: 16.0,
-            line_height_factor: 1.5,
-            paragraph_spacing_em: 0.8,
+            line_height_factor: 1.2,
+            paragraph_spacing_em: 0.6,
             bullet_indent_em: 1.5,
             bullet_char: char::from_u32(0x2022).expect("Should be able to unwrap the character •"),
             header_scales: HashMap::from([
@@ -79,12 +80,13 @@ impl SvgConfig {
 #[derive(Debug)]
 pub struct LayoutLine {
     pub buffer: Buffer,
-    pub segments: Vec<StyledBlock>,
+    pub segments: Vec<StyledSegment>,
     pub font_size: f32,
     pub prefix_len: usize,
     pub indent_offset: f32,
 }
 
+#[derive(Debug)]
 pub struct SegmentRange {
     segment_idx: usize,
     start_byte: usize,
@@ -112,111 +114,40 @@ pub fn styled_line_to_layout(
         StyledLine::Paragraph { segments } => {
             let mut buffer =
                 Buffer::new(font_system, Metrics::new(cfg.font_size, cfg.line_height()));
-            let rich_text: Vec<(&str, Attrs<'_>)> = segments
-                .iter()
-                .map(|block| {
-                    let text = block.text.as_str();
-                    let attrs = Attrs::new().weight(block.weight).style(block.style);
 
-                    (text, attrs)
+            let mut styled_blocks: Vec<StyledBlock> = Vec::new();
+
+            let styled_segments: Vec<(&str, Attrs)> = segments
+                .iter()
+                .flat_map(|seg| {
+                    match seg {
+                        StyledSegment::Text(block) => {
+                            styled_blocks.push(block.clone());
+                            vec![(
+                                block.text.as_str(),
+                                Attrs::new().weight(block.weight).style(block.style),
+                            )]
+                        }
+                        StyledSegment::HardBreak => {
+                            // * Since we are updating how we are drawing in Cosmic,
+                            // * we also need to reflect that in how we draw with SVG by inserting the same lines.
+                            // ? Mind the segment_gen which tries to snip \n\nr
+                            styled_blocks.push(StyledBlock {
+                                text: "\n".to_string(),
+                                weight: Weight::NORMAL,
+                                style: Style::Normal,
+                            });
+                            vec![("\n", Attrs::new())]
+                        }
+                    }
                 })
                 .collect();
 
-            buffer.set_rich_text(
-                font_system,
-                rich_text,
-                &Attrs::new().family(Family::SansSerif),
-                cosmic_text::Shaping::Advanced,
-                None,
-            );
-            buffer.set_size(font_system, Some(cfg.width), Some(f32::MAX));
+            let full_text: String = styled_segments.iter().map(|(text, _)| *text).collect();
 
-            LayoutLine {
-                buffer,
-                segments: segments.clone(),
-                font_size: cfg.font_size,
-                prefix_len: 0,
-                indent_offset: 0.0,
-            }
-        }
-        StyledLine::Header { segments, level } => {
-            // ? Depending on the Header indentation, we will need to increase the size of our font.
-            // ? We store the multipler in a hash-table in our config.
-            let scaled_font_size = cfg.font_size * cfg.header_scales[level];
-
-            let mut buffer = Buffer::new(
-                font_system,
-                Metrics::new(scaled_font_size, scaled_font_size * cfg.line_height_factor),
-            );
-
-            let rich_text: Vec<(&str, Attrs<'_>)> = segments
-                .iter()
-                .map(|block| {
-                    let text = block.text.as_str();
-                    // ? Headers are Bold by convention
-                    let attrs = Attrs::new().weight(Weight::BOLD).style(block.style);
-
-                    (text, attrs)
-                })
-                .collect();
-
-            buffer.set_rich_text(
-                font_system,
-                rich_text,
-                &Attrs::new().family(Family::SansSerif),
-                cosmic_text::Shaping::Advanced,
-                None,
-            );
-
-            buffer.set_size(font_system, Some(cfg.width), Some(f32::MAX));
-            println!("Header segment: {:#?}", segments);
-            
-            LayoutLine {
-                buffer,
-                segments: segments.clone(),
-                font_size: scaled_font_size,
-                prefix_len: 0,
-                indent_offset: 0.0,
-            }
-        }
-        StyledLine::BulletListItem { segments, indent } => {
-            let mut buffer = Buffer::new(
-                font_system,
-                Metrics::new(cfg.font_size, cfg.font_size * 1.5),
-            );
-
-            // * Calculate our indent by taking the number of indents and multiplying it by a unit size
-            // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size = *indent as f32 * (cfg.bullet_indent_em * cfg.font_size);
-
-            let prefix = format!("{} ", cfg.bullet_char);
-
-            // * Update our available_width based on the indent and prefix-length
-            available_width = available_width - indent_size;
-
-            let styled_segments: Vec<(String, Attrs)> = segments
-                .iter()
-                .enumerate()
-                .map(|(i, block)| {
-                    // We need to insert the bullet character here, however we can't simply use format!().as_str
-                    // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
-                    // Therefore, we need to have `styled_segments` own the full String and later have `buffer` borrow it for it's final form.
-                    let text = if i == 0 {
-                        format!("{}{}", &prefix, &block.text)
-                    } else {
-                        block.text.clone()
-                    };
-
-                    let attrs = Attrs::new().weight(block.weight).style(block.style);
-
-                    (text, attrs)
-                })
-                .collect();
-
-            // Convert our segments back into &str, Attrs to satisfy Cosmic API
             let rich_text: Vec<(&str, Attrs)> = styled_segments
                 .iter()
-                .map(|(text, attrs)| (text.as_str(), attrs.clone()))
+                .map(|(text, attrs)| (*text, attrs.clone()))
                 .collect();
 
             buffer.set_rich_text(
@@ -226,17 +157,214 @@ pub fn styled_line_to_layout(
                 cosmic_text::Shaping::Advanced,
                 None,
             );
-
             buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
 
             LayoutLine {
                 buffer,
                 segments: segments.clone(),
                 font_size: cfg.font_size,
-                prefix_len: prefix.len(),
-                indent_offset: indent_size,
+                prefix_len: 0,
+                indent_offset: 0.0,
             }
         }
+
+        // StyledLine::Header { segments, level } => {
+        //     // ? Depending on the Header indentation, we will need to increase the size of our font.
+        //     // ? We store the multipler in a hash-table in our config.
+        //     let scaled_font_size = cfg.font_size * cfg.header_scales[level];
+
+        //     let mut buffer = Buffer::new(
+        //         font_system,
+        //         Metrics::new(scaled_font_size, scaled_font_size * cfg.line_height_factor),
+        //     );
+        //     //let mut styled_blocks: Vec<StyledBlock> = Vec::new();
+        //     let styled_segments: Vec<(&str, Attrs)> = segments
+        //         .iter()
+        //         .flat_map(|block| match block {
+        //             StyledSegment::Text(block) => {
+        //                 //styled_blocks.push(block.clone());
+        //                 vec![(
+        //                     block.text.as_str(),
+        //                     Attrs::new().weight(block.weight).style(block.style),
+        //                 )]
+        //             }
+        //             StyledSegment::HardBreak => {
+        //                 //styled_blocks.push(StyledBlock { text: "\n".to_string(), weight: Weight::NORMAL, style: Style::Normal });
+        //                 vec![("\n", Attrs::new())]
+        //             }
+        //         })
+        //         .collect();
+
+        //     let rich_text: Vec<(&str, Attrs)> = styled_segments
+        //         .iter()
+        //         .map(|(text, attrs)| (*text, attrs.clone()))
+        //         .collect();
+
+        //     buffer.set_rich_text(
+        //         font_system,
+        //         rich_text,
+        //         &Attrs::new().family(Family::SansSerif),
+        //         cosmic_text::Shaping::Advanced,
+        //         None,
+        //     );
+
+        //     buffer.set_size(font_system, Some(cfg.width), Some(f32::MAX));
+
+        //     LayoutLine {
+        //         buffer,
+        //         segments: styled_segments.clone(),
+        //         font_size: scaled_font_size,
+        //         prefix_len: 0,
+        //         indent_offset: 0.0,
+        //     }
+        // }
+
+        // StyledLine::BulletListItem { segments, indent } => {
+        //     let mut buffer = Buffer::new(
+        //         font_system,
+        //         Metrics::new(cfg.font_size, cfg.paragraph_spacing()),
+        //     );
+
+        //     // * Calculate our indent by taking the number of indents and multiplying it by a unit size
+        //     // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
+        //     let indent_size = *indent as f32 * (cfg.bullet_indent_em * cfg.font_size);
+
+        //     let prefix = format!("{} ", cfg.bullet_char);
+
+        //     // * Update our available_width based on the indent and prefix-length
+        //     available_width = available_width - indent_size;
+
+        //     let mut styled_blocks = Vec::new();
+        //     let styled_segments: Vec<(String, Attrs)> = segments
+        //         .iter()
+        //         .enumerate()
+        //         .flat_map(|(i, block)| {
+        //             match block {
+        //                 StyledSegment::Text(block) => {
+        //                     styled_blocks.push(block.clone());
+        //                     let text = if i == 0 {
+        //                         // We need to insert the bullet character here, however we can't simply use format!().as_str
+        //                         // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
+        //                         // Therefore, we need to have `styled_segments` own the full String and later have `buffer` borrow it for it's final form.
+        //                         format!("{}{}", &prefix, &block.text)
+        //                     } else {
+        //                         block.text.clone()
+        //                     };
+
+        //                     let attrs = Attrs::new().weight(block.weight).style(block.style);
+
+        //                     vec![(text, attrs)]
+        //                 }
+        //                 StyledSegment::HardBreak => {
+        //                     styled_blocks.push(StyledBlock { text: "\n".to_string(), weight: Weight::NORMAL, style: Style::Normal });
+        //                     let text = "\n".to_string();
+        //                     let attrs = Attrs::new();
+        //                     vec![(text, attrs)]
+        //                 }
+        //             }
+        //         })
+        //         .collect();
+
+        //     // Convert our segments back into &str, Attrs to satisfy Cosmic API
+        //     let rich_text: Vec<(&str, Attrs)> = styled_segments
+        //         .iter()
+        //         .map(|(text, attrs)| (text.as_str(), attrs.clone()))
+        //         .collect();
+
+        //     buffer.set_rich_text(
+        //         font_system,
+        //         rich_text,
+        //         &Attrs::new().family(Family::SansSerif),
+        //         cosmic_text::Shaping::Advanced,
+        //         None,
+        //     );
+
+        //     buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
+
+        //     LayoutLine {
+        //         buffer,
+        //         segments: styled_blocks.clone(),
+        //         font_size: cfg.font_size,
+        //         prefix_len: prefix.len(),
+        //         indent_offset: indent_size,
+        //     }
+        // }
+
+        // StyledLine::NumberedListItem {
+        //     segments,
+        //     number,
+        //     indent,
+        // } => {
+        //     let mut buffer = Buffer::new(
+        //         font_system,
+        //         Metrics::new(cfg.font_size, cfg.paragraph_spacing()),
+        //     );
+
+        //     // * Calculate our indent by taking the number of indents and multiplying it by a unit size
+        //     // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
+        //     let indent_size = *indent as f32 * (cfg.bullet_indent_em * cfg.font_size);
+
+        //     let prefix = format!("{}. ", number);
+
+        //     // * Update our available_width based on the indent and prefix-length
+        //     available_width = available_width - indent_size;
+        //     let mut styled_blocks = Vec::new();
+        //     let styled_segments: Vec<(String, Attrs)> = segments
+        //         .iter()
+        //         .enumerate()
+        //         .flat_map(|(i, block)| {
+        //             match block {
+        //                 StyledSegment::Text(block) => {
+        //                     styled_blocks.push(block.clone());
+        //                     let text = if i == 0 {
+        //                         // We need to insert the bullet character here, however we can't simply use format!().as_str
+        //                         // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
+        //                         // Therefore, we need to have `styled_segments` own the full String and later have `buffer` borrow it for it's final form.
+        //                         format!("{}{}", &prefix, &block.text)
+        //                     } else {
+        //                         block.text.clone()
+        //                     };
+
+        //                     let attrs = Attrs::new().weight(block.weight).style(block.style);
+
+        //                     vec![(text, attrs)]
+        //                 }
+        //                 StyledSegment::HardBreak => {
+        //                     styled_blocks.push(StyledBlock { text: "\n".to_string(), weight: Weight::NORMAL, style: Style::Normal });
+        //                     let text = "\n".to_string();
+        //                     let attrs = Attrs::new();
+        //                     vec![(text, attrs)]
+        //                 }
+        //             }
+        //         })
+        //         .collect();
+
+        //     // * Cosmic Text expects a vector of 'spans' which are a collection of Strings and the attributes for that String.
+        //     let rich_text: Vec<(&str, Attrs)> = styled_segments
+        //         .iter()
+        //         .map(|(text, attrs)| ((text.as_str()), attrs.clone()))
+        //         .collect();
+
+        //     buffer.set_rich_text(
+        //         font_system,
+        //         rich_text,
+        //         &Attrs::new().family(Family::SansSerif),
+        //         cosmic_text::Shaping::Advanced,
+        //         None,
+        //     );
+
+        //     // * Our buffer size is limited by Width as we want accurate word-wrapping to the canvas size.
+        //     // * Our height is unbounded because we are not testing for vertical space, as each line is run on a different Buffer.
+        //     buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
+
+        //     LayoutLine {
+        //         buffer,
+        //         segments: styled_blocks.clone(),
+        //         font_size: cfg.font_size,
+        //         prefix_len: prefix.len(),
+        //         indent_offset: indent_size,
+        //     }
+        // }
         StyledLine::Blank => todo!(),
 
         _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
@@ -255,7 +383,6 @@ pub fn process_layouts(layouts: Vec<LayoutLine>, cfg: &SvgConfig) -> Vec<String>
     // The returned values are the formatted SVG, and the last character index in the line and the current Y offset.
     // We use this offset to start looking through format segments, as our Run.glyph.start values will reset each run.
     for layout in layouts {
-        println!("y offset{}:", cumulative_y_offset);
         let (svgs, updated_y) = process_layout_line(layout, cumulative_y_offset, cfg);
         svg_lines.extend(svgs);
 
@@ -270,7 +397,6 @@ pub fn process_layouts(layouts: Vec<LayoutLine>, cfg: &SvgConfig) -> Vec<String>
 fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (Vec<String>, f32) {
     let mut svg_elements: Vec<String> = Vec::new();
     let mut cumulative_y = y_cursor;
-    let cumulative_byte_offset: usize = 0;
 
     // * Build our Segment Map for this LayoutLine.
     let segment_ranges = build_segment_ranges(&layout.segments);
@@ -283,9 +409,8 @@ fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (V
     // * 3. If there has been a change, crunch the previous characters as a TSpan with the styles in that segment, and start a new string buffer.
     // * 4. Update the Y position within this Layout for the next Run
     // * 5. Add the run to our output buffer.
-    for (run_idx, run) in layout.buffer.layout_runs().enumerate() {
+    for (idx, run) in layout.buffer.layout_runs().enumerate() {
         let baseline_y = y_cursor + run.line_y;
-        println!("RunID: {} | Run: Text: {}", run_idx, run.text);
 
         let tspans = process_run(
             &run,
@@ -294,10 +419,8 @@ fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (V
             layout.prefix_len,
             layout.indent_offset,
             layout.font_size,
-            cumulative_byte_offset,
             baseline_y,
             cfg,
-            
         );
         svg_elements.push(tspans_to_svg(&tspans));
 
@@ -310,11 +433,10 @@ fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (V
 fn process_run(
     run: &LayoutRun,
     segment_ranges: &Vec<SegmentRange>,
-    segments: &Vec<StyledBlock>,
+    segments: &Vec<StyledSegment>,
     prefix_len: usize,
     indent_offset: f32,
     font_size: f32,
-    byte_offset: usize,
     y_cursor: f32,
     cfg: &SvgConfig,
 ) -> Vec<TSpan> {
@@ -322,7 +444,7 @@ fn process_run(
     // * Handle prefixes
     // ? Since we inserted our prefix, it isn't going to be part of our StyledSegment.
     // ? Therefore we need to process & emit it separately.
-    if prefix_len > 0 && byte_offset == 0 {
+    if prefix_len > 0 {
         let mut prefix_text = String::new();
 
         // * Collect all glyphs that are part of the prefix
@@ -354,25 +476,36 @@ fn process_run(
         }
 
         // Adjust the starting byte position to account for the prefix & our prior glyphs in the run.
-        let adjusted_byte_pos = (glyph.start - prefix_len) + byte_offset;
+        let adjusted_byte_pos = glyph.start - prefix_len;
 
         // Find which segment this glyph belongs to.
-        let segment_idx = segment_ranges
-            .iter()
-            .find(|range| {
-                adjusted_byte_pos >= range.start_byte && adjusted_byte_pos <= range.end_byte
-            })
-            .map(|range| range.segment_idx)
-            .expect(&format!(
-                "Should be able to find a glyph at index {}.",
-                adjusted_byte_pos
-            ));
+        let segment_range = segment_ranges.iter().find(|range| {
+            adjusted_byte_pos >= range.start_byte && adjusted_byte_pos < range.end_byte
+        });
+
+        // If we don't get a segment, we are on a Line Break.
+        let segment_idx = match segment_range {
+            Some(seg) => seg.segment_idx,
+            None => continue,
+        };
 
         // Check if we have moved into a different segment.
         if let Some(prev_idx) = current_segment_idx {
             if prev_idx != segment_idx {
                 // Emit the accumulated text as a TSpan with styling from the previous segment.
-                let prev_segment = &segments[prev_idx];
+                let prev_segment = match &segments[prev_idx] {
+                    StyledSegment::Text(block) => block,
+                    _ => unreachable!("Non-text segment shouldn't have a Range"),
+                };
+
+                // println!("Previous Block Weight: {:?}", prev_segment.weight);
+
+                // let curr_segment = match &segments[segment_idx] {
+                //     StyledSegment::Text(block) => {println!("Current Block Weight: {:?}", block.weight);
+                //     block},
+                //     _ => unreachable!("Non-text segment shouldn't have a Range"),
+                // };
+                // println!("prev {} | current: {}", prev_idx, segment_idx);
 
                 tspans.push(TSpan {
                     text: current_text.clone(),
@@ -385,6 +518,12 @@ fn process_run(
 
                 // Reset text buffer and update our X to move inline with all previous characters.
                 current_text.clear();
+
+                // if prev_segment.weight != curr_segment.weight {
+                //     println!("Weight changed");
+                //     current_text.push('\u{2009}');
+                // };
+
                 current_x = cfg.left_padding + indent_offset + glyph.x;
             }
         } else {
@@ -401,7 +540,10 @@ fn process_run(
     // At the end of the run, if we have any text remaining in our buffer, crunch it.
     if !current_text.is_empty() {
         if let Some(seg_idx) = current_segment_idx {
-            let segment = &segments[seg_idx];
+            let segment = match &segments[seg_idx] {
+                StyledSegment::Text(block) => block,
+                _ => unreachable!("Non-text segment shouldn't have a Range"),
+            };
             tspans.push(TSpan {
                 text: current_text.clone(),
                 font_size: font_size,
@@ -432,7 +574,7 @@ fn tspans_to_svg(tspans: &[TSpan]) -> String {
                 Style::Oblique => r#" font-style="oblique""#,
                 Style::Normal => "",
             };
-            
+
             let font_size = format!(r#" font-size="{}px""#, ts.font_size);
             // Return a formatted SVG String.
             format!(
@@ -454,24 +596,29 @@ fn tspans_to_svg(tspans: &[TSpan]) -> String {
     )
 }
 ///  Precompute the text range of our StyledBlock text as a byte range, which matches with the Cosmic Glyph start/end indices.
-fn build_segment_ranges(segments: &Vec<StyledBlock>) -> Vec<SegmentRange> {
+fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
     let mut ranges = Vec::new();
-
     let mut current_pos = 0;
 
     for (seg_idx, segment) in segments.iter().enumerate() {
-        // todo ? Do we need to replace these characters here, or is there somewhere sooner we can handle it after the Cosmic shaping.
-        let seg_len = segment.text.replace("\r\n", "").len();
-        // println!("Segment Length: {}", seg_len);
-        // println!("Segment Text: {}", segment.text);
+        match segment {
+            StyledSegment::Text(block) => {
+                let seg_len = block.text.len();
 
-        ranges.push(SegmentRange {
-            segment_idx: seg_idx,
-            start_byte: current_pos,
-            end_byte: current_pos + seg_len - 1,
-        });
-        current_pos += seg_len
+                ranges.push(SegmentRange {
+                    segment_idx: seg_idx,
+                    start_byte: current_pos,
+                    end_byte: current_pos + seg_len,
+                });
+                current_pos += seg_len;
+            }
+            StyledSegment::HardBreak => {
+                // No style - advance cursor.
+                current_pos += 1;
+            }
+        }
     }
+
     ranges
 }
 

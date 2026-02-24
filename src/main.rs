@@ -15,7 +15,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut font_system = FontSystem::new();
 
     // * Read in our Markdown.
-    let raw_md = fs::read_to_string("./test.md").unwrap();
+    let raw_md = fs::read_to_string("./test.md").unwrap()
+        .replace("\r\n", "\n"); // ? Normalize Line Endings up front.
 
     // * ParseOptions modifies how to parse different flavours of markdown, and which flavours to support.
     // todo Right now we just handle vanilla. We could expand into GFM later.
@@ -29,6 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // todo Refactor to a function
     // todo fix height being updated iteratively.
     if let Some(root_child) = full_md_ast.children() {
+       // println!("{:#?}", full_md_ast);
         for child in root_child {
             for style_line in parse_blocks(child, 0) {
                 layout_lines.push(styled_line_to_layout(

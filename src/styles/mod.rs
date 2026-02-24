@@ -27,26 +27,36 @@ impl StyledBlock {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum StyledSegment {
+    Text(StyledBlock),
+    HardBreak
+}
+impl StyledSegment {
+    pub fn text(text: String, ctx: StyleContext) -> Self {
+        StyledSegment::Text(StyledBlock::new(text, ctx))
+    }
+}
 // todo incomplete list of missing variants:
 // - Table
 // - Blockquote
 #[derive(Clone, Debug)]
 pub enum StyledLine {
     Header {
-        segments: Vec<StyledBlock>,
+        segments: Vec<StyledSegment>,
         level: u8,
     },
     BulletListItem {
-        segments: Vec<StyledBlock>,
+        segments: Vec<StyledSegment>,
         indent: u8,
     },
     NumberedListItem {
-        segments: Vec<StyledBlock>,
+        segments: Vec<StyledSegment>,
         number: u32,
         indent: u8,
     },
     Paragraph {
-        segments: Vec<StyledBlock>,
+        segments: Vec<StyledSegment>,
     },
     Code {
         text: String,
