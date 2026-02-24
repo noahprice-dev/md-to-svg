@@ -1,7 +1,6 @@
-use core::{f32, num, panic};
+use core::{f32, panic};
 use cosmic_text::{
     Attrs, Buffer, Family, FontSystem, LayoutRun, Metrics, Style, Weight,
-    skrifa::{font, raw::tables::base},
 };
 use std::{char, collections::HashMap};
 
@@ -108,7 +107,7 @@ pub fn styled_line_to_layout(
     cfg: &SvgConfig,
 ) -> LayoutLine {
     // * Arrange our default available width based on the overall SVG size minus any L/R padding.
-    let mut available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
+    let available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
 
     match line {
         StyledLine::Paragraph { segments } => {
@@ -143,7 +142,7 @@ pub fn styled_line_to_layout(
                 })
                 .collect();
 
-            let full_text: String = styled_segments.iter().map(|(text, _)| *text).collect();
+            let _full_text: String = styled_segments.iter().map(|(text, _)| *text).collect();
 
             let rich_text: Vec<(&str, Attrs)> = styled_segments
                 .iter()
@@ -409,7 +408,7 @@ fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (V
     // * 3. If there has been a change, crunch the previous characters as a TSpan with the styles in that segment, and start a new string buffer.
     // * 4. Update the Y position within this Layout for the next Run
     // * 5. Add the run to our output buffer.
-    for (idx, run) in layout.buffer.layout_runs().enumerate() {
+    for (_idx, run) in layout.buffer.layout_runs().enumerate() {
         let baseline_y = y_cursor + run.line_y;
 
         let tspans = process_run(
