@@ -1,6 +1,6 @@
 use core::{f32, panic};
 use cosmic_text::{
-    Attrs, Buffer, Family, FontSystem, LayoutRun, Metrics, Style, Weight,
+    Attrs, Buffer, Family, FontSystem, LayoutRun, Metrics, Style, Weight, skrifa::raw::tables::base,
 };
 use std::{char, collections::HashMap};
 
@@ -95,8 +95,6 @@ pub struct SegmentRange {
 pub struct TSpan {
     text: String,
     font_size: f32,
-    x: f32,
-    y: f32,
     weight: Weight,
     style: Style,
 }
@@ -176,19 +174,21 @@ pub fn styled_line_to_layout(
         //         font_system,
         //         Metrics::new(scaled_font_size, scaled_font_size * cfg.line_height_factor),
         //     );
-        //     //let mut styled_blocks: Vec<StyledBlock> = Vec::new();
+            
+        //     let mut styled_blocks: Vec<StyledBlock> = Vec::new();
+            
         //     let styled_segments: Vec<(&str, Attrs)> = segments
         //         .iter()
         //         .flat_map(|block| match block {
         //             StyledSegment::Text(block) => {
-        //                 //styled_blocks.push(block.clone());
+        //                 styled_blocks.push(block.clone());
         //                 vec![(
         //                     block.text.as_str(),
         //                     Attrs::new().weight(block.weight).style(block.style),
         //                 )]
         //             }
         //             StyledSegment::HardBreak => {
-        //                 //styled_blocks.push(StyledBlock { text: "\n".to_string(), weight: Weight::NORMAL, style: Style::Normal });
+        //                 styled_blocks.push(StyledBlock { text: "\n".to_string(), weight: Weight::NORMAL, style: Style::Normal });
         //                 vec![("\n", Attrs::new())]
         //             }
         //         })
@@ -408,22 +408,25 @@ fn process_layout_line(layout: LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (V
     // * 3. If there has been a change, crunch the previous characters as a TSpan with the styles in that segment, and start a new string buffer.
     // * 4. Update the Y position within this Layout for the next Run
     // * 5. Add the run to our output buffer.
-    for (_idx, run) in layout.buffer.layout_runs().enumerate() {
+    
+    for (_idx,run) in layout.buffer.layout_runs().enumerate() {
+        println!("Run # {} | run.line_y: {}, run.line_top: {}, run.line_height: {}", _idx, run.line_y, run.line_top, run.line_height);
+        println!("Run # {} | run.line_y vs run.line_top {}", _idx, run.line_y - run.line_top);
         let baseline_y = y_cursor + run.line_y;
-
+        
+        let current_x = cfg.left_padding + layout.indent_offset; // handle starting offset for the line of text.
+        
         let tspans = process_run(
             &run,
             &segment_ranges,
             &layout.segments,
             layout.prefix_len,
-            layout.indent_offset,
             layout.font_size,
-            baseline_y,
-            cfg,
         );
-        svg_elements.push(tspans_to_svg(&tspans));
-
         cumulative_y = baseline_y;
+        
+        svg_elements.push(tspans_to_svg(&tspans, current_x, cumulative_y));
+        
     }
 
     (svg_elements, cumulative_y)
@@ -434,10 +437,7 @@ fn process_run(
     segment_ranges: &Vec<SegmentRange>,
     segments: &Vec<StyledSegment>,
     prefix_len: usize,
-    indent_offset: f32,
     font_size: f32,
-    y_cursor: f32,
-    cfg: &SvgConfig,
 ) -> Vec<TSpan> {
     let mut tspans: Vec<TSpan> = vec![];
     // * Handle prefixes
@@ -455,8 +455,6 @@ fn process_run(
             tspans.push(TSpan {
                 text: prefix_text,
                 font_size: font_size,
-                x: cfg.left_padding + indent_offset,
-                y: y_cursor,
                 weight: Weight::NORMAL,
                 style: Style::Normal,
             });
@@ -465,7 +463,6 @@ fn process_run(
 
     let mut current_text: String = String::new(); // * Create a string buffer that holds all characters in a given segment range.
     let mut current_segment_idx: Option<usize> = None;
-    let mut current_x = cfg.left_padding + indent_offset; // handle starting offset for the line of text.
 
     // * Start investigating all 'glyphs' - or Unicode Codepoints.
     // ? It is important to note these are not necessarily entire characters or grapheme clusters.
@@ -496,38 +493,17 @@ fn process_run(
                     StyledSegment::Text(block) => block,
                     _ => unreachable!("Non-text segment shouldn't have a Range"),
                 };
-
-                // println!("Previous Block Weight: {:?}", prev_segment.weight);
-
-                // let curr_segment = match &segments[segment_idx] {
-                //     StyledSegment::Text(block) => {println!("Current Block Weight: {:?}", block.weight);
-                //     block},
-                //     _ => unreachable!("Non-text segment shouldn't have a Range"),
-                // };
-                // println!("prev {} | current: {}", prev_idx, segment_idx);
-
+                
                 tspans.push(TSpan {
                     text: current_text.clone(),
                     font_size: font_size,
-                    x: current_x,
-                    y: y_cursor,
                     weight: prev_segment.weight,
                     style: prev_segment.style,
                 });
 
                 // Reset text buffer and update our X to move inline with all previous characters.
                 current_text.clear();
-
-                // if prev_segment.weight != curr_segment.weight {
-                //     println!("Weight changed");
-                //     current_text.push('\u{2009}');
-                // };
-
-                current_x = cfg.left_padding + indent_offset + glyph.x;
             }
-        } else {
-            // We haven't added a content glyph yet, so start.
-            current_x = cfg.left_padding + indent_offset + glyph.x;
         }
 
         // Add this glyph to our text buffer.
@@ -546,8 +522,6 @@ fn process_run(
             tspans.push(TSpan {
                 text: current_text.clone(),
                 font_size: font_size,
-                x: current_x,
-                y: y_cursor,
                 weight: segment.weight,
                 style: segment.style,
             });
@@ -558,7 +532,7 @@ fn process_run(
 }
 
 /// Convert a `Tspan` into a raw SVG string  by a <text> tag.
-fn tspans_to_svg(tspans: &[TSpan]) -> String {
+fn tspans_to_svg(tspans: &[TSpan], x: f32, y:f32) -> String {
     let tspan_strings: Vec<String> = tspans
         .iter()
         .map(|ts| {
@@ -577,9 +551,7 @@ fn tspans_to_svg(tspans: &[TSpan]) -> String {
             let font_size = format!(r#" font-size="{}px""#, ts.font_size);
             // Return a formatted SVG String.
             format!(
-                r#"<tspan x="{}" y="{}"{}{}{}>{}</tspan>"#,
-                ts.x,
-                ts.y,
+                r#"<tspan {}{}{}>{}</tspan>"#,
                 font_size,
                 weight_attr,
                 style_attr,
@@ -590,7 +562,9 @@ fn tspans_to_svg(tspans: &[TSpan]) -> String {
 
     // todo handle custom font-size & font family
     format!(
-        r#"<text font-family="sans-serif">{}</text>"#,
+        r#"<text x="{}" y="{}" font-family="sans-serif">{}</text>"#,
+        x,
+        y,
         tspan_strings.join("")
     )
 }
