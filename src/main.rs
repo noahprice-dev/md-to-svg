@@ -15,13 +15,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut font_system = FontSystem::new();
 
     // * Read in our Markdown.
-    let raw_md = fs::read_to_string("./test.md").unwrap()
-        .replace("\r\n", "\n"); // ? Normalize Line Endings up front.
+    let md_text = fs::read_to_string("./test.md").unwrap()
+     // * Normalize Line Endings and convert inline HTML into Markdown syntax.
+        .replace("\r\n", "\n")
+        .replace("<em>", "*")
+        .replace("</em>", "*")
+        .replace("<strong>", "**")
+        .replace("</strong>", "**");
+    
+    
 
     // * ParseOptions modifies how to parse different flavours of markdown, and which flavours to support.
     // todo Right now we just handle vanilla. We could expand into GFM later.
     let opts = ParseOptions::default();
-    let full_md_ast = markdown::to_mdast(&raw_md, &opts).unwrap();
+    let full_md_ast = markdown::to_mdast(&md_text, &opts).unwrap();
 
     let mut svg_lines: Vec<String> = Vec::new();
     let mut layout_lines = Vec::new();
@@ -30,11 +37,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // todo Refactor to a function
     // todo fix height being updated iteratively.
     if let Some(root_child) = full_md_ast.children() {
-       // println!("{:#?}", full_md_ast);
+        println!("{:#?}", full_md_ast);
         for child in root_child {
             for style_line in parse_blocks(child, 0) {
                 layout_lines.push(styled_line_to_layout(
-                    &style_line,
+                    style_line,
                     &mut font_system,
                     &svg_cfg,
                 ));
@@ -42,6 +49,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     
+    //let mut buffer = Buffer::new(&mut font_system, Metrics::new(24., 24. * 1.5));
+    //buffer.set_text(&mut font_system, "This is a long paragraph that\nwraps across multiple lines.", &Attrs::new(), cosmic_text::Shaping::Advanced, None);
+    //buffer.set_size(&mut font_system, Some(f32::MAX), Some(f32::MAX));
+    //
+    //buffer.lines.iter().for_each(|line| println!("Buffer line:{}", line.text()));
     
     svg_lines.extend(process_layouts(layout_lines, &svg_cfg));
     write_svg_to_file("./outputs/test.svg", svg_lines, &svg_cfg);
