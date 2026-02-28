@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // todo Refactor to a function
     // todo fix height being updated iteratively.
     if let Some(root_child) = full_md_ast.children() {
-        println!("{:#?}", full_md_ast);
+        //println!("{:#?}", full_md_ast);
         for child in root_child {
             for style_line in parse_blocks(child, 0) {
                 layout_lines.push(styled_line_to_layout(

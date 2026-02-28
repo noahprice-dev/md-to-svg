@@ -23,7 +23,7 @@ pub struct SvgConfig {
     /// Space between discrete text blocks.
     pub line_height_factor: f32,
     /// Space between lines inside of a paragraph.
-    pub list_item_spacing_em: f32,
+    pub paragraph_spacing_em: f32,
 
     // Bullet Style Options
     pub bullet_indent_em: f32, // default 1.5 or 2.0 ->
@@ -48,7 +48,7 @@ impl SvgConfig {
             left_padding: 0.0,
             font_size: 16.0,
             line_height_factor: 1.5,
-            list_item_spacing_em: 0.6,
+            paragraph_spacing_em: 0.6,
             bullet_indent_em: 1.5,
             bullet_char: char::from_u32(0x2022).expect("Should be able to unwrap the character •"),
             header_scales: HashMap::from([
@@ -69,8 +69,8 @@ impl SvgConfig {
         self.font_size * self.line_height_factor
     }
     /// Space between lines inside of a paragraph.
-    pub const fn list_item_spacing(&self) -> f32 {
-        self.font_size * self.list_item_spacing_em
+    pub const fn paragraph_spacing(&self) -> f32 {
+        self.font_size * self.paragraph_spacing_em
     }
 }
 
@@ -81,8 +81,8 @@ pub struct LayoutLine {
     pub font_size: f32,
     pub prefix_len: usize,
     pub indent_offset: f32,
-    pub margin_top : f32,
-    pub margin_bottom : f32
+    pub margin_top: f32,
+    pub margin_bottom: f32,
 }
 
 pub enum LayoutResult {
@@ -94,14 +94,14 @@ impl LayoutResult {
     pub fn margin_top(&self) -> f32 {
         match self {
             LayoutResult::Line(lyt) => lyt.margin_top,
-            LayoutResult::Blank { .. } => 0.0 // Fixed space
+            LayoutResult::Blank { .. } => 0.0, // Fixed space
         }
     }
-    
-    pub fn margin_bottom (&self) -> f32 {
+
+    pub fn margin_bottom(&self) -> f32 {
         match self {
             LayoutResult::Line(lyt) => lyt.margin_bottom,
-            LayoutResult::Blank { .. } => 0.0 // Fixed space
+            LayoutResult::Blank { .. } => 0.0, // Fixed space
         }
     }
 }
@@ -130,7 +130,7 @@ pub fn styled_line_to_layout(
     match line {
         StyledLine::Paragraph { segments } => {
             let available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
-            
+
             let mut buffer =
                 Buffer::new(font_system, Metrics::new(cfg.font_size, cfg.line_height()));
 
@@ -176,8 +176,8 @@ pub fn styled_line_to_layout(
                 font_size: cfg.font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
-                margin_top: cfg.line_height(),
-                margin_bottom: cfg.line_height()
+                margin_top: cfg.font_size * cfg.paragraph_spacing_em,
+                margin_bottom: cfg.font_size * cfg.paragraph_spacing_em,
             })
         }
 
@@ -230,16 +230,14 @@ pub fn styled_line_to_layout(
                 prefix_len: 0,
                 indent_offset: 0.0,
                 margin_top: cfg.header_margin_top,
-                margin_bottom: cfg.header_margin_bot
+                margin_bottom: cfg.header_margin_bot,
             })
         }
 
         StyledLine::BulletListItem { segments, indent } => {
             let mut buffer = Buffer::new(
                 font_system,
-                // todo This *looks* right, but is not exactly what I want.
-                // todo The original configuration should be changed rather than using the wrong var to achieve the right effect.
-                Metrics::new(cfg.font_size, cfg.list_item_spacing()),
+                Metrics::new(cfg.font_size, cfg.paragraph_spacing()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
@@ -301,9 +299,8 @@ pub fn styled_line_to_layout(
                 font_size: cfg.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
-                margin_top: cfg.list_item_spacing(),
-                margin_bottom: cfg.list_item_spacing()
-                
+                margin_top: cfg.paragraph_spacing(),
+                margin_bottom: cfg.paragraph_spacing(),
             })
         }
 
@@ -314,7 +311,7 @@ pub fn styled_line_to_layout(
         } => {
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.font_size, cfg.list_item_spacing()),
+                Metrics::new(cfg.font_size, cfg.paragraph_spacing()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
@@ -378,13 +375,13 @@ pub fn styled_line_to_layout(
                 font_size: cfg.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
-                margin_top: cfg.list_item_spacing(),
-                margin_bottom: cfg.list_item_spacing()
+                margin_top: cfg.paragraph_spacing(),
+                margin_bottom: cfg.paragraph_spacing(),
             })
         }
-        StyledLine::Blank => {
-            LayoutResult::Blank {height: cfg.line_height()}
-        }
+        StyledLine::Blank => LayoutResult::Blank {
+            height: cfg.line_height(),
+        },
         _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
     }
 }
@@ -399,10 +396,10 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
     // Process it into an SVG.
     // The returned values are the formatted SVG, and the last character index in the line and the current Y offset.
     // We use this offset to start looking through format segments, as our Run.glyph.start values will reset each run.
-    
+
     let mut iter = layouts.into_iter().peekable();
-    
-    while let Some(layout) = iter.next(){
+
+    while let Some(layout) = iter.next() {
         match &layout {
             LayoutResult::Line(lyt) => {
                 let (svgs, updated_y) = process_layout_line(lyt, cumulative_y_offset, cfg);
@@ -410,22 +407,27 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
 
                 // * After each LayoutLine, we insert a gap to represent a line between paragraphs.
                 // * We perform "margin collapsing" - attempting to mirror the CSS behaviour.
-                let next_margin_top = iter.peek()
-                .map(|next| next.margin_top())
-                .unwrap_or(0.0);
-            
+                let next_margin_top = iter.peek().map(|next| next.margin_top()).unwrap_or(0.0);
+
                 let gap = layout.margin_bottom().max(next_margin_top);
+                println!(
+                    "top margin: {} | bottom margin: {}",
+                    next_margin_top,
+                    layout.margin_bottom()
+                );
+                println!("Gap: {}", gap);
+                println!("Layout new Y: {}", updated_y + gap);
+                
                 cumulative_y_offset = updated_y + gap;
             }
-            
-            LayoutResult::Blank{height} => {
+
+            LayoutResult::Blank { height } => {
                 cumulative_y_offset = cumulative_y_offset + height;
             }
+        }
+        // Return final SVG collection.
     }
-    // Return final SVG collection.
-    
-}
-svg_lines
+    svg_lines
 }
 
 fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (Vec<String>, f32) {
@@ -437,20 +439,9 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
 
     let mut run_byte_offset: usize = 0;
 
-    
-    for (idx, run) in layout.buffer.layout_runs().enumerate() {
+    for (_idx, run) in layout.buffer.layout_runs().enumerate() {
         let baseline_y = y_cursor + run.line_y;
-        //println!("Layout Segments: {:#?}", layout.segments);
-        
-        println!(
-            "Run index: {} | text: {:?} | run.text length {}",
-            idx,
-            run.text,
-            run.text.len()
-        );
-
-        
-        
+       
         let full_text: &String = &layout
             .segments
             .iter()
@@ -459,7 +450,6 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
                 StyledSegment::HardBreak => "\n".to_string(),
             })
             .collect();
-
         let current_x = cfg.left_padding + layout.indent_offset; // handle starting offset for the line of text.
 
         let tspans = process_run(
@@ -470,7 +460,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
             layout.font_size,
             run_byte_offset,
         );
-        
+
         cumulative_y = baseline_y;
         run_byte_offset += run.text.len()
             + if full_text.as_bytes().get(run_byte_offset + run.text.len()) == Some(&b'\n') {
@@ -479,7 +469,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
                 0
             };
 
-        svg_elements.push(tspans_to_svg(&tspans, current_x, cumulative_y));
+        svg_elements.push(tspans_to_svg(&tspans, current_x, run.line_y + y_cursor));
     }
 
     (svg_elements, cumulative_y)
@@ -561,17 +551,17 @@ fn process_run(
         }
 
         // Add this glyph to our text buffer.
-        println!(
-            "Glyph Character: {} | Start: {}, Glyph End: {}",
-            &run.text[glyph.start..glyph.end],
-            glyph.start,
-            glyph.end
-        );
+        // println!(
+        //     "Glyph Character: {} | Start: {}, Glyph End: {}",
+        //     &run.text[glyph.start..glyph.end],
+        //     glyph.start,
+        //     glyph.end
+        // );
         let ch = &run.text[glyph.start..glyph.end];
         current_text.push_str(ch);
         current_segment_idx = Some(segment_idx);
     }
-
+    
     // At the end of the run, if we have any text remaining in our buffer, crunch it.
     if !current_text.is_empty() {
         if let Some(seg_idx) = current_segment_idx {
@@ -637,7 +627,6 @@ fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
         //println!("Current Pos: {}", current_pos);
         match segment {
             StyledSegment::Text(block) => {
-                println!("Segment text: {:?}", block.text);
                 let seg_len = block.text.len();
 
                 ranges.push(SegmentRange {
@@ -656,8 +645,8 @@ fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
             }
         }
     }
-    println!("Current Pos: {}", current_pos);
-    println!("Ranges: {:?}", ranges);
+    // println!("Current Pos: {}", current_pos);
+    // println!("Ranges: {:?}", ranges);
     ranges
 }
 
