@@ -31,13 +31,10 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
         Node::Text(text) => {
             // * Cosmic will treat "\n" as a new line directive, which means that "soft wraps",
             // * such as when the user enters a
-            let normalized = text.value
-                .trim_matches('\n')
-                .replace("\n", " ")
-                .to_string();
+            let normalized = text.value.trim_matches('\n').replace("\n", " ").to_string();
 
             // This is a final node. We can collapse into a new StyledBlock.
-                vec![StyledSegment::Text(StyledBlock::new(normalized, context))]     
+            vec![StyledSegment::Text(StyledBlock::new(normalized, context))]
         }
 
         Node::Paragraph(para) => {
@@ -61,12 +58,22 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
         }
         Node::Html(html) => {
             let mut blocks = Vec::new();
-            if html.value.to_ascii_lowercase() == "<br>"  || html.value.to_lowercase() == "<br/>"{
+            if html.value.to_ascii_lowercase() == "<br>" || html.value.to_lowercase() == "<br/>" {
                 blocks.extend(vec![StyledSegment::HardBreak]);
             } else {
+                // investigate foreignObject Tag.
                 // Convert HTML to... text? die?
             }
             blocks
+        }
+
+        Node::InlineCode(code) => {
+            println!("Inline code");
+            context.monospace = true;
+            let normalized = code.value.trim_matches('\n').replace("\n", " ").to_string();
+
+            // This is a final node. We can collapse into a new StyledBlock.
+            vec![StyledSegment::Text(StyledBlock::new(normalized, context))]
         }
         Node::Break(_) => {
             vec![StyledSegment::HardBreak]
@@ -99,16 +106,14 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             let segments = parse_inline_styles(node, StyleContext::default());
             vec![StyledLine::Paragraph { segments: segments }]
         }
-        Node::Html(html) => {
-            match extract_html_tag(&html.value).as_deref() {
-                Some("br") => vec![StyledLine::Blank],
-                Some(unknown) => {
-                    eprintln!("Warning: Unsupported HTML Tag <{}> - skipping..", unknown);
-                    vec![]
-                }
-                None => vec![]
+        Node::Html(html) => match extract_html_tag(&html.value).as_deref() {
+            Some("br") => vec![StyledLine::Blank],
+            Some(unknown) => {
+                eprintln!("Warning: Unsupported HTML Tag <{}> - skipping..", unknown);
+                vec![]
             }
-        }
+            None => vec![],
+        },
         Node::List(list) => {
             let mut lines = Vec::new();
             let mut counter = list.start.unwrap_or(1);
@@ -162,6 +167,4 @@ fn extract_html_tag(tag: &str) -> Option<String> {
     } else {
         None
     }
-    
-    
 }

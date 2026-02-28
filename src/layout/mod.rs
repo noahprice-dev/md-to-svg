@@ -1,5 +1,5 @@
 use core::{f32, panic};
-use cosmic_text::{Attrs, Buffer, Family, FontSystem, LayoutRun, Metrics, Style, Weight};
+use cosmic_text::{Attrs, Buffer, Family, FamilyOwned, FontSystem, LayoutRun, Metrics, Style, Weight};
 use std::{char, collections::HashMap};
 
 use crate::styles::{StyledLine, StyledSegment};
@@ -113,11 +113,12 @@ pub struct SegmentRange {
     end_byte: usize,
 }
 
-pub struct TSpan {
+pub struct TSpan{
     text: String,
     font_size: f32,
     weight: Weight,
     style: Style,
+    family: FamilyOwned,
 }
 
 pub fn styled_line_to_layout(
@@ -142,7 +143,7 @@ pub fn styled_line_to_layout(
                             //styled_blocks.push(block.clone());
                             vec![(
                                 block.text.as_str(),
-                                Attrs::new().weight(block.weight).style(block.style),
+                                Attrs::new().weight(block.weight).style(block.style).family(block.family.as_family()),
                             )]
                         }
                         StyledSegment::HardBreak => {
@@ -475,7 +476,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     (svg_elements, cumulative_y)
 }
 
-fn process_run(
+fn process_run<'a>(
     run: &LayoutRun,
     segment_ranges: &Vec<SegmentRange>,
     segments: &Vec<StyledSegment>,
@@ -502,6 +503,7 @@ fn process_run(
                 font_size: font_size,
                 weight: Weight::NORMAL,
                 style: Style::Normal,
+                family: FamilyOwned::SansSerif
             });
         }
     }
@@ -543,6 +545,7 @@ fn process_run(
                     font_size: font_size,
                     weight: prev_segment.weight,
                     style: prev_segment.style,
+                    family: prev_segment.family.clone()
                 });
 
                 // Reset text buffer and update our X to move inline with all previous characters.
@@ -574,6 +577,7 @@ fn process_run(
                 font_size: font_size,
                 weight: segment.weight,
                 style: segment.style,
+                family: segment.family.clone()
             });
         }
     }
@@ -597,20 +601,30 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
                 Style::Oblique => r#" font-style="oblique""#,
                 Style::Normal => "",
             };
-
-            let font_size = format!(r#" font-size="{}px""#, ts.font_size);
+            
+            let font_family = match &ts.family{
+                FamilyOwned::Name(smol_str) => {
+                        format!(r#"font-family="{}, sans-serif""#, smol_str)
+                    },
+                FamilyOwned::SansSerif => r#"font-family="sans-serif""#.to_string(),
+                FamilyOwned::Serif => r#"font-family="serif""#.to_string(),
+                FamilyOwned::Cursive => r#"font-family="cursive""#.to_string(),
+                FamilyOwned::Fantasy => r#"font-family="fantasy" "#.to_string(),
+                FamilyOwned::Monospace => r#"font-family="monospace""#.to_string(),
+            };
+            
+            let font_size = format!(r#" font-size="{}px" "#, ts.font_size);
             // Return a formatted SVG String.
             format!(
-                r#"<tspan {}{}{}>{}</tspan>"#,
+                r#"<tspan {}{}{}{}>{}</tspan>"#,
                 font_size,
                 weight_attr,
                 style_attr,
+                font_family,
                 html_escape(&ts.text)
             )
         })
         .collect();
-
-    // todo handle custom font-size & font family
     format!(
         r#"<text x="{}" y="{}" font-family="sans-serif">{}</text>"#,
         x,

@@ -1,13 +1,17 @@
-use cosmic_text::{Style, Weight};
+use cosmic_text::{FamilyOwned, Style, Weight};
 
 
 
 #[derive(Debug, Clone)]
 // todo support strikethrough - this passes down to the SVG directly.
-pub struct StyledBlock {
+/// Settings for a set of glyphs to be rendered.
+/// Family defaults to SansSerif
+// todo can we augment this to use Config defaults as a default? Alternatively use an
+pub struct StyledBlock{
     pub text: String,
     pub weight: Weight,
     pub style: Style,
+    pub family: FamilyOwned,
 }
 impl StyledBlock {
     pub fn new(text: String, ctx: StyleContext) -> Self {
@@ -23,6 +27,12 @@ impl StyledBlock {
             } else {
                 Style::Normal
             },
+            family: if ctx.monospace {
+                FamilyOwned::Monospace
+            } else {
+                FamilyOwned::SansSerif
+            },
+            
         }
     }
 }
@@ -58,7 +68,7 @@ pub enum StyledLine {
     Paragraph {
         segments: Vec<StyledSegment>,
     },
-    Code {
+    InlineCode {
         text: String,
     },
     Blank,
@@ -71,7 +81,7 @@ impl StyledLine {
             StyledLine::BulletListItem {..} => String::from("Bullet List Item"),
             StyledLine::NumberedListItem { .. } => String::from("Numbered List Item"),
             StyledLine::Paragraph { .. } => String::from("Paragraph"),
-            StyledLine::Code { ..} => String::from("Code"),
+            StyledLine::InlineCode { ..} => String::from("Code"),
             StyledLine::Blank => String::from("Blank"),
         }
     }
@@ -84,6 +94,7 @@ impl StyledLine {
 pub struct StyleContext {
     pub bold: bool,
     pub italic: bool,
+    pub monospace: bool,
 }
 
 impl StyleContext {
@@ -91,6 +102,7 @@ impl StyleContext {
         StyleContext {
             bold: false,
             italic: false,
+            monospace: false
         }
     }
 }
