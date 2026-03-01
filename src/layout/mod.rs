@@ -1,5 +1,7 @@
 use core::{f32, panic};
-use cosmic_text::{Attrs, Buffer, Family, FamilyOwned, FontSystem, LayoutRun, Metrics, Style, Weight};
+use cosmic_text::{
+    Attrs, Buffer, Family, FamilyOwned, FontSystem, LayoutRun, Metrics, Style, Weight,
+};
 use std::{char, collections::HashMap};
 
 use crate::styles::{StyledLine, StyledSegment};
@@ -113,7 +115,7 @@ pub struct SegmentRange {
     end_byte: usize,
 }
 
-pub struct TSpan{
+pub struct TSpan {
     text: String,
     font_size: f32,
     weight: Weight,
@@ -143,7 +145,10 @@ pub fn styled_line_to_layout(
                             //styled_blocks.push(block.clone());
                             vec![(
                                 block.text.as_str(),
-                                Attrs::new().weight(block.weight).style(block.style).family(block.family.as_family()),
+                                Attrs::new()
+                                    .weight(block.weight)
+                                    .style(block.style)
+                                    .family(block.family.as_family()),
                             )]
                         }
                         StyledSegment::HardBreak => {
@@ -411,14 +416,7 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
                 let next_margin_top = iter.peek().map(|next| next.margin_top()).unwrap_or(0.0);
 
                 let gap = layout.margin_bottom().max(next_margin_top);
-                println!(
-                    "top margin: {} | bottom margin: {}",
-                    next_margin_top,
-                    layout.margin_bottom()
-                );
-                println!("Gap: {}", gap);
-                println!("Layout new Y: {}", updated_y + gap);
-                
+
                 cumulative_y_offset = updated_y + gap;
             }
 
@@ -441,8 +439,11 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     let mut run_byte_offset: usize = 0;
 
     for (_idx, run) in layout.buffer.layout_runs().enumerate() {
+        println!("Run Text Length:{}", run.text.len());
+        println!("Run Length: {}", run.glyphs.len());
+        println!("Run Byte Offset: {}", run_byte_offset);
         let baseline_y = y_cursor + run.line_y;
-       
+
         let full_text: &String = &layout
             .segments
             .iter()
@@ -451,6 +452,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
                 StyledSegment::HardBreak => "\n".to_string(),
             })
             .collect();
+
         let current_x = cfg.left_padding + layout.indent_offset; // handle starting offset for the line of text.
 
         let tspans = process_run(
@@ -459,12 +461,12 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
             &layout.segments,
             layout.prefix_len,
             layout.font_size,
-            run_byte_offset,
+            //run_byte_offset,
         );
 
         cumulative_y = baseline_y;
-        run_byte_offset += run.text.len()
-            + if full_text.as_bytes().get(run_byte_offset + run.text.len()) == Some(&b'\n') {
+        run_byte_offset += run.glyphs.len()
+            + if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
                 1
             } else {
                 0
@@ -482,7 +484,7 @@ fn process_run<'a>(
     segments: &Vec<StyledSegment>,
     prefix_len: usize,
     font_size: f32,
-    run_byte_offset: usize,
+    // run_byte_offset: usize,
 ) -> Vec<TSpan> {
     let mut tspans: Vec<TSpan> = vec![];
 
@@ -503,7 +505,7 @@ fn process_run<'a>(
                 font_size: font_size,
                 weight: Weight::NORMAL,
                 style: Style::Normal,
-                family: FamilyOwned::SansSerif
+                family: FamilyOwned::SansSerif,
             });
         }
     }
@@ -517,8 +519,11 @@ fn process_run<'a>(
         if glyph.start < prefix_len {
             continue; // Skip prefix glyphs
         }
+        println!("Glyph Start: Index {}", glyph.start);
+        
         // Adjust the starting byte position to account for the prefix & our prior glyphs in the run.
-        let adjusted_byte_pos = glyph.start + run_byte_offset - prefix_len;
+        let adjusted_byte_pos = glyph.start - prefix_len;
+        
 
         // Find which segment this glyph belongs to.
         let segment_range = segment_ranges.iter().find(|range| {
@@ -528,7 +533,9 @@ fn process_run<'a>(
         // If we don't get a segment, we are on a Line Break.
         let segment_idx = match segment_range {
             Some(seg) => seg.segment_idx,
-            None => continue,
+            None => {
+                panic!("Could not segment index for glyph: {} at index pos: {}", run.text.chars().nth(glyph.start).unwrap(), adjusted_byte_pos);
+            },
         };
 
         // Check if we have moved into a different segment.
@@ -545,26 +552,18 @@ fn process_run<'a>(
                     font_size: font_size,
                     weight: prev_segment.weight,
                     style: prev_segment.style,
-                    family: prev_segment.family.clone()
+                    family: prev_segment.family.clone(),
                 });
 
                 // Reset text buffer and update our X to move inline with all previous characters.
                 current_text.clear();
             }
         }
-
-        // Add this glyph to our text buffer.
-        // println!(
-        //     "Glyph Character: {} | Start: {}, Glyph End: {}",
-        //     &run.text[glyph.start..glyph.end],
-        //     glyph.start,
-        //     glyph.end
-        // );
         let ch = &run.text[glyph.start..glyph.end];
         current_text.push_str(ch);
         current_segment_idx = Some(segment_idx);
     }
-    
+
     // At the end of the run, if we have any text remaining in our buffer, crunch it.
     if !current_text.is_empty() {
         if let Some(seg_idx) = current_segment_idx {
@@ -577,7 +576,7 @@ fn process_run<'a>(
                 font_size: font_size,
                 weight: segment.weight,
                 style: segment.style,
-                family: segment.family.clone()
+                family: segment.family.clone(),
             });
         }
     }
@@ -601,18 +600,18 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
                 Style::Oblique => r#"font-style="oblique""#,
                 Style::Normal => "",
             };
-            
-            let font_family = match &ts.family{
+
+            let font_family = match &ts.family {
                 FamilyOwned::Name(smol_str) => {
-                        format!(r#"font-family="{}, sans-serif""#, smol_str)
-                    },
+                    format!(r#"font-family="{}, sans-serif""#, smol_str)
+                }
                 FamilyOwned::SansSerif => r#"font-family="sans-serif""#.to_string(),
                 FamilyOwned::Serif => r#"font-family="serif""#.to_string(),
                 FamilyOwned::Cursive => r#"font-family="cursive""#.to_string(),
                 FamilyOwned::Fantasy => r#"font-family="fantasy" "#.to_string(),
                 FamilyOwned::Monospace => r#"font-family="monospace""#.to_string(),
             };
-            
+
             let font_size = format!(r#" font-size="{}px" "#, ts.font_size);
             // Return a formatted SVG String.
             format!(
