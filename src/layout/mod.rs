@@ -177,8 +177,8 @@ pub fn styled_line_to_layout(
                 font_size: cfg.font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
-                margin_top: cfg.font_size * cfg.paragraph_spacing_em,
-                margin_bottom: cfg.font_size * cfg.paragraph_spacing_em,
+                margin_top: cfg.paragraph_spacing(),
+                margin_bottom: cfg.paragraph_spacing(),
             })
         }
 
@@ -591,14 +591,14 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
         .iter()
         .map(|ts| {
             let weight_attr = if ts.weight == Weight::BOLD {
-                r#" font-weight="bold" "#
+                r#"font-weight="bold" "#
             } else {
                 ""
             };
 
             let style_attr = match ts.style {
-                Style::Italic => r#" font-style="italic""#,
-                Style::Oblique => r#" font-style="oblique""#,
+                Style::Italic => r#"font-style="italic""#,
+                Style::Oblique => r#"font-style="oblique""#,
                 Style::Normal => "",
             };
             
@@ -616,7 +616,7 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
             let font_size = format!(r#" font-size="{}px" "#, ts.font_size);
             // Return a formatted SVG String.
             format!(
-                r#"<tspan {}{}{}{}>{}</tspan>"#,
+                r#"<tspan {} {} {} {}>{}</tspan>"#,
                 font_size,
                 weight_attr,
                 style_attr,
