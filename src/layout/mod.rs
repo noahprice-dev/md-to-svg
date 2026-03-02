@@ -478,7 +478,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     (svg_elements, cumulative_y)
 }
 
-fn process_run<'a>(
+fn process_run(
     run: &LayoutRun,
     segment_ranges: &Vec<SegmentRange>,
     segments: &Vec<StyledSegment>,
@@ -520,10 +520,9 @@ fn process_run<'a>(
             continue; // Skip prefix glyphs
         }
         println!("Glyph Start: Index {}", glyph.start);
-        
+
         // Adjust the starting byte position to account for the prefix & our prior glyphs in the run.
         let adjusted_byte_pos = glyph.start - prefix_len;
-        
 
         // Find which segment this glyph belongs to.
         let segment_range = segment_ranges.iter().find(|range| {
@@ -534,8 +533,12 @@ fn process_run<'a>(
         let segment_idx = match segment_range {
             Some(seg) => seg.segment_idx,
             None => {
-                panic!("Could not segment index for glyph: {} at index pos: {}", run.text.chars().nth(glyph.start).unwrap(), adjusted_byte_pos);
-            },
+                panic!(
+                    "Could not segment index for glyph: {} at index pos: {}",
+                    run.text.chars().nth(glyph.start).unwrap(),
+                    adjusted_byte_pos
+                );
+            }
         };
 
         // Check if we have moved into a different segment.
@@ -668,4 +671,209 @@ fn html_escape(text: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        layout::{SegmentRange, TSpan, build_segment_ranges, tspans_to_svg},
+        styles::{StyledBlock, StyledSegment},
+    };
+    use cosmic_text::{FamilyOwned, Style, Weight};
+
+    #[test]
+    fn tspans_to_svg_preserves_bold_weight_includes_attribute() {
+        // * Arrange
+        // Create a simple input text, no styling.
+        let input_text = "Hello World".to_string();
+        let attr = r#"font-weight="bold""#.to_string();
+        // Form a TSpan with some default X/Y.
+        let tspan = TSpan {
+            text: input_text.clone(),
+            font_size: 16.0,
+            weight: Weight::BOLD,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        };
+        // * Act
+        // call `tspans_to_svg` with the created TSpan, X, Y
+        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        // * Assert
+        // CreatedTspanStr contains our simple input text.
+        assert!(svg_string.contains(&input_text));
+        assert!(svg_string.contains(&attr));
+    }
+
+    #[test]
+    fn tspans_to_svg_normal_weight_omits_attribute() {
+        // * Arrange
+        // Create a simple input text, no styling.
+        let input_text = "Hello World".to_string();
+        let attr = r#"font-weight="bold""#.to_string();
+        // Form a TSpan with some default X/Y.
+        let tspan = TSpan {
+            text: input_text.clone(),
+            font_size: 16.0,
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        };
+        // * Act
+        // call `tspans_to_svg` with the created TSpan, X, Y
+        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        // * Assert
+        // CreatedTspanStr contains our simple input text.
+        assert!(svg_string.contains(&input_text));
+        assert!(!svg_string.contains(&attr));
+    }
+
+    #[test]
+    fn tspans_to_svg_italic_style_includes_attribute() {
+        // * Arrange
+        // Create a simple input text, no styling.
+        let input_text = "Hello World".to_string();
+        let attr = r#"font-style="italic""#.to_string();
+        // Form a TSpan with some default X/Y.
+        let tspan = TSpan {
+            text: input_text.clone(),
+            font_size: 16.0,
+            weight: Weight::NORMAL,
+            style: Style::Italic,
+            family: FamilyOwned::SansSerif,
+        };
+        // * Act
+        // call `tspans_to_svg` with the created TSpan, X, Y
+        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        // * Assert
+        // CreatedTspanStr contains our simple input text.
+        assert!(svg_string.contains(&input_text));
+        assert!(svg_string.contains(&attr));
+    }
+
+    #[test]
+    fn tspans_to_svg_normal_style_omits_attribute() {
+        // * Arrange
+        // Create a simple input text, no styling.
+        let input_text = "Hello World".to_string();
+        let attr = r#"font-style="italic""#.to_string();
+        // Form a TSpan with some default X/Y.
+        let tspan = TSpan {
+            text: input_text.clone(),
+            font_size: 16.0,
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        };
+        // * Act
+        // call `tspans_to_svg` with the created TSpan, X, Y
+        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        // * Assert
+        // CreatedTspanStr contains our simple input text.
+        assert!(svg_string.contains(&input_text));
+        assert!(!svg_string.contains(&attr));
+    }
+
+    #[test]
+    fn tspans_to_svg_text_content_matches_input() {
+        // * Arrange
+        // Create a simple input text, no styling.
+        let input_text = "Hello World".to_string();
+
+        // Form a TSpan with some default X/Y.
+        let tspan = TSpan {
+            text: input_text.clone(),
+            font_size: 16.0,
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        };
+
+        // * Act
+        // call `tspans_to_svg` with the created TSpan, X, Y
+        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        // * Assert
+        // CreatedTspanStr contains our simple input text.
+        assert!(svg_string.contains(&input_text));
+    }
+
+    #[test]
+    fn tspans_to_svg_escapes_html_characters() {
+        // * Arrange
+        let input_text = r#"<&>""#.to_string();
+        let compare_text = "&lt;&amp;&gt;&quot;";
+
+        let tspan = TSpan {
+            text: input_text.clone(),
+            font_size: 16.0,
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        };
+
+        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        println!("{}", svg_string);
+        assert!(svg_string.contains(&compare_text));
+    }
+
+    #[test]
+    fn build_segment_single_text_segment_has_correct_byte_offsets() {
+        // * Arrange
+        let seg_text = "Hello World".to_string();
+        // Create a vector of StyledSegments.
+        let segment = vec![StyledSegment::Text(StyledBlock {
+            text: seg_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+        
+        // * Act
+        let segment_ranges = build_segment_ranges(&segment);
+        
+        // * Assert
+        assert_eq!(segment_ranges.len(), 1);
+        let range = &segment_ranges[0];
+        assert_eq!(range.start_byte + range.end_byte, 11);
+        assert_eq!(range.start_byte, 0);
+        assert_eq!(range.end_byte, 11);
+    }
+    
+    #[test]
+    fn build_segment_ranges_consecutive_segments_have_adjusted_offsets() {
+        let first_segment_text = "Hello ".to_string();
+        let second_segment_text = "World".to_string();
+        
+        let segments = vec![
+            StyledSegment::Text(StyledBlock { text: first_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
+            StyledSegment::Text(StyledBlock { text: second_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
+        ];
+
+        let segment_ranges = build_segment_ranges(&segments);
+        
+        // * assert
+        assert_eq!(segment_ranges.len(), 2);
+        assert_eq!(segment_ranges[0].start_byte, 0);
+        assert_eq!(segment_ranges[0].end_byte, 6);
+        assert_eq!(segment_ranges[1].start_byte, 6);
+    }
+    
+    #[test]
+    fn build_segment_ranges_hard_break_advances_offset_by_one(){
+            let first_segment_text = "Hello ".to_string();
+        let second_segment_text = "World".to_string();
+        
+        let segments = vec![
+            StyledSegment::Text(StyledBlock { text: first_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
+            StyledSegment::HardBreak,
+            StyledSegment::Text(StyledBlock { text: second_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
+        ];
+        
+        let segment_ranges = build_segment_ranges(&segments);
+        
+        // * assert
+        assert_eq!(segment_ranges.len(), 2); // Remains 2! Only count Text segments.
+        assert_eq!(segment_ranges[0].start_byte, 0);
+        assert_eq!(segment_ranges[0].end_byte, 6); // Does not modify the contents of Segment 1!
+        assert_eq!(segment_ranges[1].start_byte, 7); // Offset by 1 from Hard Break.
+    }
 }
