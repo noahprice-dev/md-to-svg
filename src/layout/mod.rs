@@ -779,7 +779,7 @@ mod tests {
         // Create a simple input text, no styling.
         let input_text = "Hello World".to_string();
 
-        // Form a TSpan with some default X/Y.
+        // Form a TSpan with some defaults
         let tspan = TSpan {
             text: input_text.clone(),
             font_size: 16.0,
@@ -833,7 +833,6 @@ mod tests {
         // * Assert
         assert_eq!(segment_ranges.len(), 1);
         let range = &segment_ranges[0];
-        assert_eq!(range.start_byte + range.end_byte, 11);
         assert_eq!(range.start_byte, 0);
         assert_eq!(range.end_byte, 11);
     }
