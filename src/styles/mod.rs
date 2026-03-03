@@ -2,7 +2,7 @@ use cosmic_text::{FamilyOwned, Style, Weight};
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 // todo support strikethrough - this passes down to the SVG directly.
 /// Settings for a set of glyphs to be rendered.
 /// Family defaults to SansSerif
@@ -37,7 +37,7 @@ impl StyledBlock {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum StyledSegment {
     Text(StyledBlock),
     HardBreak

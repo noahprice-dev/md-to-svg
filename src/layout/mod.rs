@@ -519,7 +519,7 @@ fn process_run(
         if glyph.start < prefix_len {
             continue; // Skip prefix glyphs
         }
-        println!("Glyph Start: Index {}", glyph.start);
+        // println!("Glyph Start: Index {}", glyph.start);
 
         // Adjust the starting byte position to account for the prefix & our prior glyphs in the run.
         let adjusted_byte_pos = glyph.start - prefix_len;
@@ -676,11 +676,36 @@ fn html_escape(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use crate::{
-        layout::{SegmentRange, TSpan, build_segment_ranges, tspans_to_svg},
-        styles::{StyledBlock, StyledSegment},
+        layout::{
+            LayoutResult, SvgConfig, TSpan, build_segment_ranges, styled_line_to_layout,
+            tspans_to_svg,
+        },
+        styles::{StyledBlock, StyledLine, StyledSegment},
     };
     use cosmic_text::{FamilyOwned, Style, Weight};
 
+    // * --- utilities ---
+    use std::path::Path;
+
+    use cosmic_text::{FontSystem, fontdb::Database};
+
+    /// Create a simple FontSystem with default Sans-Serif font derived from tests/fonts.
+    pub fn create_default_test_font_system() -> FontSystem {
+        // Create a default, empty FontDB
+        let mut db = Database::new();
+        // * Load Noto Sans from tests/fonts/
+        // ? We load all fonts in this directory instead of loading the individual font variants (Italic, Bold etc)
+        // ? Our default case is to access all of these, rather than loading specific fonts for each test.
+        // ? we could break this out to accept a Weight/Style variant struct as an arg, and match accordingly later on if we need.
+        db.load_fonts_dir(Path::new("tests/fonts/"));
+
+        // override default Sans-Serif on db.
+        db.set_sans_serif_family("Noto Sans"); // ! I don't know how to validate this...
+
+        let font_sys = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
+        font_sys
+    }
+    // * --- tspan_to_svg ---
     #[test]
     fn tspans_to_svg_preserves_bold_weight_includes_attribute() {
         // * Arrange
@@ -814,7 +839,7 @@ mod tests {
         println!("{}", svg_string);
         assert!(svg_string.contains(&compare_text));
     }
-
+    // * --- build_segment_ranges ---
     #[test]
     fn build_segment_single_text_segment_has_correct_byte_offsets() {
         // * Arrange
@@ -826,53 +851,389 @@ mod tests {
             style: Style::Normal,
             family: FamilyOwned::SansSerif,
         })];
-        
+
         // * Act
         let segment_ranges = build_segment_ranges(&segment);
-        
+
         // * Assert
         assert_eq!(segment_ranges.len(), 1);
         let range = &segment_ranges[0];
         assert_eq!(range.start_byte, 0);
         assert_eq!(range.end_byte, 11);
     }
-    
+
     #[test]
     fn build_segment_ranges_consecutive_segments_have_adjusted_offsets() {
         let first_segment_text = "Hello ".to_string();
         let second_segment_text = "World".to_string();
-        
+
         let segments = vec![
-            StyledSegment::Text(StyledBlock { text: first_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
-            StyledSegment::Text(StyledBlock { text: second_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
+            StyledSegment::Text(StyledBlock {
+                text: first_segment_text.clone(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }),
+            StyledSegment::Text(StyledBlock {
+                text: second_segment_text.clone(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }),
         ];
 
         let segment_ranges = build_segment_ranges(&segments);
-        
+
         // * assert
         assert_eq!(segment_ranges.len(), 2);
         assert_eq!(segment_ranges[0].start_byte, 0);
         assert_eq!(segment_ranges[0].end_byte, 6);
         assert_eq!(segment_ranges[1].start_byte, 6);
     }
-    
+
     #[test]
-    fn build_segment_ranges_hard_break_advances_offset_by_one(){
-            let first_segment_text = "Hello ".to_string();
+    fn build_segment_ranges_hard_break_advances_offset_by_one() {
+        let first_segment_text = "Hello ".to_string();
         let second_segment_text = "World".to_string();
-        
+
         let segments = vec![
-            StyledSegment::Text(StyledBlock { text: first_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
+            StyledSegment::Text(StyledBlock {
+                text: first_segment_text.clone(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }),
             StyledSegment::HardBreak,
-            StyledSegment::Text(StyledBlock { text: second_segment_text.clone(), weight: Weight::NORMAL, style: Style::Normal, family: FamilyOwned::SansSerif }),
+            StyledSegment::Text(StyledBlock {
+                text: second_segment_text.clone(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }),
         ];
-        
+
         let segment_ranges = build_segment_ranges(&segments);
-        
+
         // * assert
         assert_eq!(segment_ranges.len(), 2); // Remains 2! Only count Text segments.
         assert_eq!(segment_ranges[0].start_byte, 0);
         assert_eq!(segment_ranges[0].end_byte, 6); // Does not modify the contents of Segment 1!
         assert_eq!(segment_ranges[1].start_byte, 7); // Offset by 1 from Hard Break.
+    }
+
+    // * --- styled_line_to_layout ---
+    #[test]
+    fn styled_line_to_layout_paragraph() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let paragraph_text = "This is some paragraph text.".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: paragraph_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::Paragraph {
+            segments: segments.clone(),
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+        // Assert segments match the input StyledLine's segments
+        assert_eq!(line.segments, segments);
+        // Assert font_size matches cfg.font_size
+        assert_eq!(line.font_size, cfg.font_size);
+        // Assert margin_top matches cfg.paragraph_spacing()
+        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        // Assert margin_bottom matches cfg.paragraph_spacing()
+        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        // Assert prefix_len is 0 (paragraphs have no prefix)
+        assert_eq!(line.prefix_len, 0);
+        // Assert indent_offset is 0.0 (paragraphs have no indent)
+        assert_eq!(line.indent_offset, 0.0);
+    }
+
+    #[test]
+    fn styled_line_to_layout_paragraph_handles_hard_break() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let paragraph_text = "This is some paragraph text.".to_string();
+
+        let segments = vec![
+            StyledSegment::Text(StyledBlock {
+                text: paragraph_text.clone(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }),
+            StyledSegment::HardBreak,
+        ];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::Paragraph {
+            segments: segments.clone(),
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+        // Assert segments match the input StyledLine's segments
+        assert_eq!(line.segments, segments);
+        // Assert font_size matches cfg.font_size
+        assert_eq!(line.font_size, cfg.font_size);
+        // Assert margin_top matches cfg.paragraph_spacing()
+        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        // Assert margin_bottom matches cfg.paragraph_spacing()
+        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        // Assert prefix_len is 0 (paragraphs have no prefix)
+        assert_eq!(line.prefix_len, 0);
+        // Assert indent_offset is 0.0 (paragraphs have no indent)
+        assert_eq!(line.indent_offset, 0.0);
+    }
+
+    #[test]
+    fn styled_line_to_layout_header_applies_font_scale() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let header_text = "# Header".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: header_text.clone(),
+            weight: Weight::BOLD,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::Header {
+            segments: segments.clone(),
+            level: 1,
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+
+        assert_eq!(line.segments, segments);
+        assert_eq!(line.font_size, cfg.font_size * cfg.header_scales[&1]);
+        assert_eq!(line.margin_top, cfg.header_margin_top);
+        assert_eq!(line.margin_bottom, cfg.header_margin_bot);
+        assert_eq!(line.prefix_len, 0);
+        assert_eq!(line.indent_offset, 0.0);
+    }
+
+    #[test]
+    fn styled_line_to_bullet_list_item_applies_prefix_length() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let header_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: header_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::BulletListItem {
+            segments: segments.clone(),
+            indent: 0,
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+
+        assert_eq!(line.segments, segments);
+        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
+        assert_eq!(line.indent_offset, 0.0);
+        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+    }
+
+    #[test]
+    fn styled_line_to_bullet_list_item_applies_indent_offset() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let header_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: header_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::BulletListItem {
+            segments: segments.clone(),
+            indent: 3,
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+
+        assert_eq!(line.segments, segments);
+        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
+        assert_eq!(
+            line.indent_offset,
+            3.0 * (cfg.bullet_indent_em * cfg.font_size)
+        );
+        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+    }
+
+    #[test]
+    fn styled_line_to_numbered_list_item_applies_prefix_length() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let header_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: header_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        let list_item_number = 6;
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::NumberedListItem {
+            segments: segments.clone(),
+            number: list_item_number,
+            indent: 0,
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+
+        assert_eq!(line.segments, segments);
+        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+        assert_eq!(line.indent_offset, 0.0);
+        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+    }
+
+    #[test]
+    fn styled_line_to_numbered_list_item_applies_indent_offset() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let header_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: header_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::NumberedListItem {
+            segments: segments.clone(),
+            number: 2,
+            indent: 2,
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+
+        assert_eq!(line.segments, segments);
+        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+        assert_eq!(
+            line.indent_offset,
+            2.0 * (cfg.bullet_indent_em * cfg.font_size)
+        );
+        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+    }
+
+    #[test]
+    fn styled_line_blank_returns_line_height() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        // Create a blank StyledLine
+        let styled_line_para = StyledLine::Blank;
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Blank { height: _ }));
+        let LayoutResult::Blank { height } = layout_result else {
+            panic!("Expected LayoutResult::Blank");
+        };
+        assert_eq!(height, cfg.line_height());
     }
 }
