@@ -439,9 +439,18 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     let mut run_byte_offset: usize = 0;
 
     for (_idx, run) in layout.buffer.layout_runs().enumerate() {
-        println!("Run Text Length:{}", run.text.len());
+        println!("Run Index: {}", _idx);
+        println!("Run Text: {}", run.text);
         println!("Run Length: {}", run.glyphs.len());
-        println!("Run Byte Offset: {}", run_byte_offset);
+        println!(
+            "First glyph start: {}",
+            run.glyphs.first().map(|g| g.start).unwrap_or(0)
+        );
+        println!(
+            "Last glyph end: {}",
+            run.glyphs.last().map(|g| g.end).unwrap_or(0)
+        );
+        
         let baseline_y = y_cursor + run.line_y;
 
         let full_text: &String = &layout
@@ -461,13 +470,16 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
             &layout.segments,
             layout.prefix_len,
             layout.font_size,
-            //run_byte_offset,
+            run_byte_offset,
         );
 
         cumulative_y = baseline_y;
-        run_byte_offset += run.glyphs.len()
-            + if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
-                1
+        
+        // ? Cosmic will hold the full line text of a soft-wrapped line in all runs within the layout.
+        // ? Lines with a HardBreak, or newline, at the end will only have the line they are writing's content.
+        // ? Therefore, we use a run_byte_offset for wrapped runs, and do not for soft-wrapped runs.
+        run_byte_offset = if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
+                run_byte_offset + run.glyphs.len() + 1
             } else {
                 0
             };
@@ -484,7 +496,7 @@ fn process_run(
     segments: &Vec<StyledSegment>,
     prefix_len: usize,
     font_size: f32,
-    // run_byte_offset: usize,
+    run_byte_offset: usize,
 ) -> Vec<TSpan> {
     let mut tspans: Vec<TSpan> = vec![];
 
@@ -519,10 +531,9 @@ fn process_run(
         if glyph.start < prefix_len {
             continue; // Skip prefix glyphs
         }
-        // println!("Glyph Start: Index {}", glyph.start);
 
         // Adjust the starting byte position to account for the prefix & our prior glyphs in the run.
-        let adjusted_byte_pos = glyph.start - prefix_len;
+        let adjusted_byte_pos = (glyph.start - prefix_len) + run_byte_offset;
 
         // Find which segment this glyph belongs to.
         let segment_range = segment_ranges.iter().find(|range| {
@@ -533,8 +544,9 @@ fn process_run(
         let segment_idx = match segment_range {
             Some(seg) => seg.segment_idx,
             None => {
+                println!("Current text: {}", current_text);
                 panic!(
-                    "Could not segment index for glyph: {} at index pos: {}",
+                    "Could not find segment index for glyph: {} at index pos: {}",
                     run.text.chars().nth(glyph.start).unwrap(),
                     adjusted_byte_pos
                 );
@@ -654,7 +666,6 @@ fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
                 current_pos += seg_len;
             }
 
-            // todo Investigate this breaking text with '\'.
             StyledSegment::HardBreak => {
                 // No style - advance cursor.
                 current_pos += 1;
