@@ -1,9 +1,11 @@
-use std::path::Path;
+use std::{error::Error, path::Path};
 
 use cosmic_text::{
     Family, FontSystem, Style, Weight,
     fontdb::{Database, Query},
 };
+
+use roxmltree::Document;
 
 /// Create a simple FontSystem with default Sans-Serif font derived from tests/fonts.
 pub fn create_default_test_font_system() -> FontSystem {
@@ -42,4 +44,16 @@ pub fn create_default_test_font_system() -> FontSystem {
     
     let font_sys = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
     font_sys
+}
+
+pub fn normalize_svg_for_comparison(text: &str) -> String {
+    let doc = roxmltree::Document::parse(&text).unwrap();
+    
+    let mut tspan_contents = vec![];
+    for node in doc.descendants(){
+        if node.tag_name().name() == "tspan" {
+            tspan_contents.push(node.text().expect("TSpan should not be empty."));
+        }
+    }
+    tspan_contents.concat()
 }
