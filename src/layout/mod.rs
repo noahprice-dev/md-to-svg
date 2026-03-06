@@ -450,7 +450,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
             "Last glyph end: {}",
             run.glyphs.last().map(|g| g.end).unwrap_or(0)
         );
-        
+
         let baseline_y = y_cursor + run.line_y;
 
         let full_text: &String = &layout
@@ -474,11 +474,12 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
         );
 
         cumulative_y = baseline_y;
-        
+
         // ? Cosmic will hold the full line text of a soft-wrapped line in all runs within the layout.
         // ? Lines with a HardBreak, or newline, at the end will only have the line they are writing's content.
         // ? Therefore, we use a run_byte_offset for wrapped runs, and do not for soft-wrapped runs.
-        run_byte_offset = if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
+        run_byte_offset =
+            if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
                 run_byte_offset + run.glyphs.len() + 1
             } else {
                 0
@@ -545,9 +546,9 @@ fn process_run(
             Some(seg) => seg.segment_idx,
             None => {
                 println!("Current text: {}", current_text);
-                panic!(
-                    "Could not find segment index for glyph: {} at index pos: {}",
-                    run.text.chars().nth(glyph.start).unwrap(),
+                unreachable!(
+                    "Glyph at index {} has no matching segment range - \
+                    build_segment_ranges produced incomplete coverage",
                     adjusted_byte_pos
                 );
             }
