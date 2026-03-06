@@ -6,6 +6,36 @@ This is a paragraph with some **bold text** and some *italic text* and even ***b
 
 Another paragraph with `inline code` in the middle.
 
+## Lists
+
+### Unordered Lists
+
+- First item
+- Second item
+- Third item
+  - Nested item 1
+  - Nested item 2
+    - Double nested
+  - Back to single nest
+- Fourth item
+
+### Ordered Lists
+
+1. First numbered item
+2. Second numbered item
+3. Third numbered item
+   1. Nested numbered item
+   2. Another nested item
+4. Fourth numbered item
+
+### Mixed Lists
+
+1. Numbered item
+2. Another numbered
+   - Bullet under numbered
+   - Another bullet
+3. Back to numbered
+
 ## Text Formatting
 
 This paragraph has **bold at start** and normal after.
