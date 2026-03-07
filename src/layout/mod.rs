@@ -188,8 +188,8 @@ pub fn styled_line_to_layout(
         }
 
         StyledLine::Header { segments, level } => {
-            // ? Depending on the Header indentation, we will need to increase the size of our font.
-            // ? We store the multipler in a hash-table in our config.
+            // * Depending on the Header indentation, we will need to increase the size of our font.
+            // * We store the multipler in a hash-table in our config.
             let scaled_font_size = cfg.font_size * cfg.header_scales[&level];
 
             let available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
@@ -475,9 +475,9 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
 
         cumulative_y = baseline_y;
 
-        // ? Cosmic will hold the full line text of a soft-wrapped line in all runs within the layout.
-        // ? Lines with a HardBreak, or newline, at the end will only have the line they are writing's content.
-        // ? Therefore, we use a run_byte_offset for wrapped runs, and do not for soft-wrapped runs.
+        // * Cosmic will hold the full line text of a soft-wrapped line in all runs within the layout.
+        // * Lines with a HardBreak, or newline, at the end will only have the line they are writing's content.
+        // * Therefore, we use a run_byte_offset for wrapped runs, and do not for soft-wrapped runs.
         run_byte_offset =
             if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
                 run_byte_offset + run.glyphs.len() + 1
@@ -1179,7 +1179,7 @@ mod tests {
 
         assert_eq!(line.segments, segments);
         assert_eq!(line.font_size, cfg.font_size);
-        assert_eq!(line.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+        assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(line.indent_offset, 0.0);
         assert_eq!(line.margin_top, cfg.paragraph_spacing());
         assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
@@ -1219,7 +1219,7 @@ mod tests {
 
         assert_eq!(line.segments, segments);
         assert_eq!(line.font_size, cfg.font_size);
-        assert_eq!(line.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+        assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(
             line.indent_offset,
             2.0 * (cfg.bullet_indent_em * cfg.font_size)
