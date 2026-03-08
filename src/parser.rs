@@ -84,7 +84,6 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
 }
 
 pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
-    // Check what type of Line Level block we are looking at.
     match node {
         Node::Root(root) => {
             let mut lines = Vec::new();

@@ -6,13 +6,13 @@ use markdown::message::Message;
 pub enum MdToSvgError {
     #[error("input file not found: {0}")]
     InputNotFound(PathBuf),
-    #[error("input file exists but cannot be read {0}")]
+    #[error("input file not readable: {0}")]
     InputUnreadable(io::Error),
     #[error("markdown parse failed: {reason}")]
     ParseFailed { reason: String },
     #[error("output file not found: {0}")]
     OutputNotFound(PathBuf),
-    #[error("output file not readable: {0}")]
+    #[error("output file not writeable: {0}")]
     OutputNotWritable(io::Error),
     #[error("HTML parse failed: {0}")]
     HtmlParseFailed(String),

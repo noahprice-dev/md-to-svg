@@ -439,17 +439,17 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     let mut run_byte_offset: usize = 0;
 
     for (_idx, run) in layout.buffer.layout_runs().enumerate() {
-        println!("Run Index: {}", _idx);
-        println!("Run Text: {}", run.text);
-        println!("Run Length: {}", run.glyphs.len());
-        println!(
-            "First glyph start: {}",
-            run.glyphs.first().map(|g| g.start).unwrap_or(0)
-        );
-        println!(
-            "Last glyph end: {}",
-            run.glyphs.last().map(|g| g.end).unwrap_or(0)
-        );
+        // println!("Run Index: {}", _idx);
+        // println!("Run Text: {}", run.text);
+        // println!("Run Length: {}", run.glyphs.len());
+        // println!(
+        //     "First glyph start: {}",
+        //     run.glyphs.first().map(|g| g.start).unwrap_or(0)
+        // );
+        // println!(
+        //     "Last glyph end: {}",
+        //     run.glyphs.last().map(|g| g.end).unwrap_or(0)
+        // );
 
         let baseline_y = y_cursor + run.line_y;
 
@@ -606,7 +606,7 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
         .iter()
         .map(|ts| {
             let weight_attr = if ts.weight == Weight::BOLD {
-                r#"font-weight="bold" "#
+                r#"font-weight="bold""#
             } else {
                 ""
             };
@@ -624,14 +624,14 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
                 FamilyOwned::SansSerif => r#"font-family="sans-serif""#.to_string(),
                 FamilyOwned::Serif => r#"font-family="serif""#.to_string(),
                 FamilyOwned::Cursive => r#"font-family="cursive""#.to_string(),
-                FamilyOwned::Fantasy => r#"font-family="fantasy" "#.to_string(),
+                FamilyOwned::Fantasy => r#"font-family="fantasy""#.to_string(),
                 FamilyOwned::Monospace => r#"font-family="monospace""#.to_string(),
             };
 
-            let font_size = format!(r#" font-size="{}px" "#, ts.font_size);
+            let font_size = format!(r#"font-size="{}px""#, ts.font_size);
             // Return a formatted SVG String.
             format!(
-                r#"<tspan {} {} {} {}>{}</tspan>"#,
+                r#"<tspan {} {} {} {}>{}</tspan>"#, // TODO collapse whitespace properly for unused attrs
                 font_size,
                 weight_attr,
                 style_attr,

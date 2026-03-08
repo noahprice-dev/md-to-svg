@@ -6,11 +6,13 @@ use std::{
 
 use cosmic_text::FontSystem;
 use markdown::ParseOptions;
+use roxmltree::Node;
 
 use crate::{
     MdToSvgError,
     layout::{LayoutResult, SvgConfig, process_layouts, styled_line_to_layout},
     parser::parse_blocks,
+    styles::StyledLine,
 };
 
 pub fn process_md_to_svg(
@@ -37,21 +39,18 @@ pub fn process_md_to_svg(
 
     // * Note - per the `markdown` documentation, this cannot fail using standard parse options.
     // * It should only fail if JSX/MDX is enabled, AND that parsing fails.
-    let md_ast = markdown::to_mdast(&md_text, &ParseOptions::default())?;
+    let root = markdown::to_mdast(&md_text, &ParseOptions::default())?;
 
-    let root = md_ast.children().ok_or_else(|| MdToSvgError::ParseFailed {
-        reason: "No Root found in MD document".to_string(),
-    })?;
-
-    let styled_lines = parse_blocks(&root[0], 0);
-
+    let styled_lines  = parse_blocks(&root, 0);
+    
+    println!("Styled Lines: {:#?}", styled_lines);
     let layout_lines = styled_lines
         .into_iter() //? note into_iter consumes the original!
         .map(|styled_line| styled_line_to_layout(styled_line, font_system, cfg))
         .collect::<Vec<LayoutResult>>();
 
     let text_tags = process_layouts(layout_lines, cfg);
-
+    
     let svg_file = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
         <svg
@@ -76,9 +75,7 @@ pub fn write_svg_to_file(
     output_path: &std::path::Path,
     svg_data: String,
 ) -> Result<(), MdToSvgError> {
-    // TODO - Add a flag or cfg option to use `create` instead, allowing for file-overwriting by default.
-    // TODO Ensure user is well-warned of this default behaviour in CLI!
-    let outfile = File::create_new(output_path).map_err(|err| match err.kind() {
+    let outfile = File::create(output_path).map_err(|err| match err.kind() {
         ErrorKind::NotFound => MdToSvgError::OutputNotFound(output_path.to_path_buf()),
         _ => MdToSvgError::OutputNotWritable(err),
     })?;
