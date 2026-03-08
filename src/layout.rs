@@ -545,7 +545,7 @@ fn process_run(
         let segment_idx = match segment_range {
             Some(seg) => seg.segment_idx,
             None => {
-                println!("Current text: {}", current_text);
+                //println!("Current text: {}", current_text);
                 unreachable!(
                     "Glyph at index {} has no matching segment range - \
                     build_segment_ranges produced incomplete coverage",
@@ -848,7 +848,6 @@ mod tests {
         };
 
         let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
-        println!("{}", svg_string);
         assert!(svg_string.contains(&compare_text));
     }
     // * --- build_segment_ranges ---
