@@ -1,6 +1,6 @@
 use cosmic_text::{FamilyOwned, Style, Weight};
 use md_to_svg::layout::{ process_layouts, styled_line_to_layout};
-use md_to_svg::pipeline::SvgConfig;
+use md_to_svg::config::SvgConfig;
 use md_to_svg::styles::{StyledBlock, StyledLine, StyledSegment};
 
 use crate::common::{create_default_test_font_system, normalize_svg_for_comparison};

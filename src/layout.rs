@@ -4,7 +4,7 @@ use cosmic_text::{
 };
 use std::{char, collections::HashMap};
 
-use crate::{pipeline::SvgConfig, styles::{StyledLine, StyledSegment}};
+use crate::{config::SvgConfig, styles::{StyledLine, StyledSegment}};
 
 
 

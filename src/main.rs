@@ -1,7 +1,8 @@
 use clap::Parser;
 use cosmic_text::FontSystem;
 use md_to_svg::cli::Cli;
-use md_to_svg::pipeline::{self, SvgConfig};
+use md_to_svg::pipeline;
+use md_to_svg::config::SvgConfig;
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
