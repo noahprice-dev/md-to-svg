@@ -1,7 +1,7 @@
 use clap::Parser;
 use cosmic_text::FontSystem;
 use md_to_svg::cli::Cli;
-use md_to_svg::pipeline;
+use md_to_svg::pipeline::{self, SvgConfig};
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     // * -- Set defaults --
-    let svg_cfg = pipeline::SvgConfig::default();
+    let svg_cfg = SvgConfig::new();
     let mut font_system = FontSystem::new(); // * Detect system fonts and load
 
     let text_tags =

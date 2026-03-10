@@ -1,16 +1,17 @@
-use std::{
-    collections::HashMap, fs::{self, File}, io::{BufWriter, ErrorKind, Write}, path::Path
-};
-
 use cosmic_text::FontSystem;
+use derive_builder::Builder;
 use markdown::ParseOptions;
-use roxmltree::Node;
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::{BufWriter, ErrorKind, Write},
+    path::Path,
+};
 
 use crate::{
     MdToSvgError,
     layout::{LayoutResult, process_layouts, styled_line_to_layout},
     parser::parse_blocks,
-    styles::StyledLine,
 };
 
 pub fn process_md_to_svg(
@@ -39,8 +40,8 @@ pub fn process_md_to_svg(
     // * It should only fail if JSX/MDX is enabled, AND that parsing fails.
     let root = markdown::to_mdast(&md_text, &ParseOptions::default())?;
 
-    let styled_lines  = parse_blocks(&root, 0);
-    
+    let styled_lines = parse_blocks(&root, 0);
+
     println!("Styled Lines: {:#?}", styled_lines);
     let layout_lines = styled_lines
         .into_iter() //? note into_iter consumes the original!
@@ -48,7 +49,7 @@ pub fn process_md_to_svg(
         .collect::<Vec<LayoutResult>>();
 
     let text_tags = process_layouts(layout_lines, cfg);
-    
+
     let svg_file = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
         <svg
@@ -90,9 +91,13 @@ pub fn write_svg_to_file(
     Ok(())
 }
 
+#[derive(Builder)]
+#[builder(setter(into, strip_option))]
 pub struct SvgConfig {
     // SVG Canvas Options
+    #[builder(default = 600.)]
     pub width: f32,
+    #[builder(default = 800.)]
     pub height: f32,
     // ? Support CSS Style padding args
     // ? This is for the actual SVG, not relevant to the Cosmic text.
@@ -100,7 +105,6 @@ pub struct SvgConfig {
     pub right_padding: f32,
     pub bottom_padding: f32,
     pub left_padding: f32,
-
     // Font Details
     pub font_size: f32,
     // todo expose this as an option to the end user?
@@ -124,7 +128,9 @@ pub struct SvgConfig {
 }
 
 impl SvgConfig {
-    pub fn default() -> Self {
+    /// Create an SvgConfig with default values.
+    /// Notably: 800px high by 600px wide, font size 16px, no padding, white background.
+    pub fn new() -> Self {
         SvgConfig {
             width: 600.0,
             height: 800.0,
@@ -151,11 +157,11 @@ impl SvgConfig {
         }
     }
     /// Space between discrete text blocks.
-    pub const fn line_height(&self) -> f32 {
+    pub const fn get_line_height(&self) -> f32 {
         self.font_size * self.line_height_factor
     }
     /// Space between lines inside of a paragraph.
-    pub const fn paragraph_spacing(&self) -> f32 {
+    pub const fn get_paragraph_spacing(&self) -> f32 {
         self.font_size * self.paragraph_spacing_em
     }
 }
