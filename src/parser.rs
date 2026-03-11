@@ -1,5 +1,4 @@
 use markdown::mdast::Node;
-use regex::Regex;
 
 use crate::styles::{StyleContext, StyledBlock, StyledLine, StyledSegment};
 
@@ -16,7 +15,6 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             }
             blocks
         }
-
         Node::Emphasis(emph) => {
             context.italic = true;
             // We are creating a new vec each time.... how do we collapse them?
@@ -27,16 +25,16 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             }
             blocks
         }
-
         Node::Text(text) => {
             // * Cosmic will treat "\n" as a new line directive, which means that "soft wraps",
-            // * such as when the user enters a
+            // * such as when a user has created a new line for clarity in the MD, will be seen as a Hard Break.
+            // * To ensure we only handle expicit Line Breaks, we replace with a space character to continue the line gracefully,
+            // * while not breaking up words.
             let normalized = text.value.trim_matches('\n').replace("\n", " ").to_string();
 
             // This is a final node. We can collapse into a new StyledBlock.
             vec![StyledSegment::Text(StyledBlock::new(normalized, context))]
         }
-
         Node::Paragraph(para) => {
             let mut blocks = Vec::new();
 
@@ -46,7 +44,6 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             }
             blocks
         }
-
         Node::Heading(heading) => {
             let mut blocks = Vec::new();
             // Pass through to handle styling..
@@ -61,14 +58,14 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             if html.value.to_ascii_lowercase() == "<br>" || html.value.to_lowercase() == "<br/>" {
                 blocks.extend(vec![StyledSegment::HardBreak]);
             } else {
-                // investigate foreignObject Tag.
-                // Convert HTML to... text? die?
+                // * Render the HTML as-is.
+                eprintln!("Warning: Unsupported HTML Tag {}. Rendering as plain text...", html.value.clone());
+                
+                blocks.push(StyledSegment::Text(StyledBlock::new(html.value.clone(), context)));
             }
             blocks
         }
-
         Node::InlineCode(code) => {
-            println!("Inline code");
             context.monospace = true;
             let normalized = code.value.trim_matches('\n').replace("\n", " ").to_string();
 
@@ -78,13 +75,22 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
         Node::Break(_) => {
             vec![StyledSegment::HardBreak]
         }
-
-        _ => panic!("InlineStyle Type not yet implemented: {:?} ", node),
+        unknown => {
+            //? Note that we cannot extract the Node variant name simply, so i am ignoring it for now.
+            eprintln!(
+                "Warning: Inline style {:?} not supported. Rendering as plain text... ",
+                unknown
+            );
+            // ? Nodes do not have any single, common typing that I can read in. As well, I have lost the original markdown after parsing, so its impossible to just copy directly.
+            vec![StyledSegment::Text(StyledBlock::new(
+                format!("{:?}", unknown),
+                context,
+            ))]
+        }
     }
 }
 
 pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
-    // Check what type of Line Level block we are looking at.
     match node {
         Node::Root(root) => {
             let mut lines = Vec::new();
@@ -106,13 +112,14 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             let segments = parse_inline_styles(node, StyleContext::default());
             vec![StyledLine::Paragraph { segments: segments }]
         }
-        Node::Html(html) => match extract_html_tag(&html.value).as_deref() {
-            Some("br") => vec![StyledLine::Blank],
-            Some(unknown) => {
-                eprintln!("Warning: Unsupported HTML Tag <{}> - skipping..", unknown);
-                vec![]
-            }
-            None => vec![],
+        Node::Html(_) => {
+            // * Html styling is handled at an inline-level and returned as a Text object.
+            // * Aside from <br> we don't currently support ANY HTML.
+            // * Therefore, we can render any non break HTML as a paragraph, alongside our warning.
+            // * This is subject to change, and will require more advanced filtering at the block level later.
+            // todo support HTML tables. This should be part of the table feature impl in a future version.
+            let segments = parse_inline_styles(node, StyleContext::default());
+            vec![StyledLine::Paragraph { segments: segments }]
         },
         Node::List(list) => {
             let mut lines = Vec::new();
@@ -152,19 +159,15 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             lines
         }
 
-        _ => panic!("ParseBlocks has not yet implemented: {:?} ", node),
-    }
-}
-
-/// Retrieve the first HTML tag in a line to understand if we can parse it or not.\
-/// ### Note
-/// This is an extremely naive RegEx parse. If we require more complex HTML parsing, turn to another crate before adding more regex.
-fn extract_html_tag(tag: &str) -> Option<String> {
-    let re = Regex::new(r#"<([a-zA-Z][a-zA-Z0-9]*)"#).unwrap();
-    let caps = re.captures(&tag);
-    if let Some(tag) = caps {
-        Some(tag.get_match().as_str().to_string().to_ascii_lowercase())
-    } else {
-        None
+        unknown => {
+            eprintln!(
+                "Warning: Unsupported node type: {:#?}. Rendering as plain text..",
+                unknown
+            );
+            let unknown_node_segments = parse_inline_styles(unknown, StyleContext::default());
+            vec![StyledLine::Paragraph {
+                segments: unknown_node_segments,
+            }]
+        }
     }
 }

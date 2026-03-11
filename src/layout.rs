@@ -2,79 +2,10 @@ use core::{f32, panic};
 use cosmic_text::{
     Attrs, Buffer, Family, FamilyOwned, FontSystem, LayoutRun, Metrics, Style, Weight,
 };
-use std::{char, collections::HashMap};
 
-use crate::styles::{StyledLine, StyledSegment};
+use crate::{config::SvgConfig, styles::{StyledLine, StyledSegment}};
 
-pub struct SvgConfig {
-    // SVG Canvas Options
-    pub width: f32,
-    pub height: f32,
-    // ? Support CSS Style padding args
-    // ? This is for the actual SVG, not relevant to the Cosmic text.
-    pub top_padding: f32,
-    pub right_padding: f32,
-    pub bottom_padding: f32,
-    pub left_padding: f32,
 
-    // Font Details
-    pub font_size: f32,
-    // todo expose this as an option to the end user?
-    // todo  Explain default is sans-serif.
-    //pub font_family: Family,
-    /// Space between discrete text blocks.
-    pub line_height_factor: f32,
-    /// Space between lines inside of a paragraph.
-    pub paragraph_spacing_em: f32,
-
-    // Bullet Style Options
-    pub bullet_indent_em: f32, // default 1.5 or 2.0 ->
-    pub bullet_char: char,
-
-    // Header Style Options
-    pub header_scales: HashMap<u8, f32>,
-    pub header_margin_top: f32,
-    pub header_margin_bot: f32,
-
-    pub bg_color: String,
-}
-
-impl SvgConfig {
-    pub fn default() -> Self {
-        SvgConfig {
-            width: 600.0,
-            height: 800.0,
-            top_padding: 0.0,
-            right_padding: 0.0,
-            bottom_padding: 0.0,
-            left_padding: 0.0,
-            font_size: 16.0,
-            line_height_factor: 1.5,
-            paragraph_spacing_em: 0.6,
-            bullet_indent_em: 1.5,
-            bullet_char: char::from_u32(0x2022).expect("Should be able to unwrap the character •"),
-            header_scales: HashMap::from([
-                (1, 2.0),
-                (2, 1.6),
-                (3, 1.3),
-                (4, 1.1),
-                (5, 1.0),
-                (6, 1.0),
-            ]),
-            header_margin_top: 0.0,
-            header_margin_bot: 0.0,
-            bg_color: String::from("#FFFFFF"),
-        }
-    }
-    /// Space between discrete text blocks.
-    pub const fn line_height(&self) -> f32 {
-        self.font_size * self.line_height_factor
-    }
-    /// Space between lines inside of a paragraph.
-    pub const fn paragraph_spacing(&self) -> f32 {
-        self.font_size * self.paragraph_spacing_em
-    }
-}
 
 #[derive(Debug)]
 pub struct LayoutLine {
@@ -132,10 +63,10 @@ pub fn styled_line_to_layout(
 
     match line {
         StyledLine::Paragraph { segments } => {
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
             let mut buffer =
-                Buffer::new(font_system, Metrics::new(cfg.font_size, cfg.line_height()));
+                Buffer::new(font_system, Metrics::new(cfg.text_opts.font_size, cfg.get_line_height()));
 
             let styled_segments: Vec<(&str, Attrs)> = segments
                 .iter()
@@ -179,24 +110,24 @@ pub fn styled_line_to_layout(
             LayoutResult::Line(LayoutLine {
                 buffer,
                 segments: segments.clone(),
-                font_size: cfg.font_size,
+                font_size: cfg.text_opts.font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
-                margin_top: cfg.paragraph_spacing(),
-                margin_bottom: cfg.paragraph_spacing(),
+                margin_top: cfg.get_paragraph_spacing(),
+                margin_bottom: cfg.get_paragraph_spacing(),
             })
         }
 
         StyledLine::Header { segments, level } => {
-            // ? Depending on the Header indentation, we will need to increase the size of our font.
-            // ? We store the multipler in a hash-table in our config.
-            let scaled_font_size = cfg.font_size * cfg.header_scales[&level];
+            // * Depending on the Header indentation, we will need to increase the size of our font.
+            // * We store the multipler in a hash-table in our config.
+            let scaled_font_size = cfg.text_opts.font_size * cfg.header_opts.header_scales[&level];
 
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(scaled_font_size, scaled_font_size * cfg.line_height_factor),
+                Metrics::new(scaled_font_size, scaled_font_size * cfg.text_opts.line_height_factor),
             );
 
             let styled_segments: Vec<(&str, Attrs)> = segments
@@ -235,25 +166,25 @@ pub fn styled_line_to_layout(
                 font_size: scaled_font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
-                margin_top: cfg.header_margin_top,
-                margin_bottom: cfg.header_margin_bot,
+                margin_top: cfg.header_opts.header_margin_top,
+                margin_bottom:cfg.header_opts.header_margin_bot,
             })
         }
 
         StyledLine::BulletListItem { segments, indent } => {
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.font_size, cfg.paragraph_spacing()),
+                Metrics::new(cfg.text_opts.font_size, cfg.get_paragraph_spacing()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size = indent as f32 * (cfg.bullet_indent_em * cfg.font_size);
+            let indent_size = indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
 
             // * Update our available_width based on the indent and prefix-length
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding) - indent_size;
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right) - indent_size;
 
-            let prefix = format!("{} ", cfg.bullet_char);
+            let prefix = format!("{} ", cfg.text_opts.bullet_char);
 
             let styled_segments: Vec<(String, Attrs)> = segments
                 .iter()
@@ -302,11 +233,11 @@ pub fn styled_line_to_layout(
             LayoutResult::Line(LayoutLine {
                 buffer,
                 segments: segments.clone(),
-                font_size: cfg.font_size,
+                font_size: cfg.text_opts.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
-                margin_top: cfg.paragraph_spacing(),
-                margin_bottom: cfg.paragraph_spacing(),
+                margin_top: cfg.get_paragraph_spacing(),
+                margin_bottom: cfg.get_paragraph_spacing(),
             })
         }
 
@@ -317,15 +248,15 @@ pub fn styled_line_to_layout(
         } => {
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.font_size, cfg.paragraph_spacing()),
+                Metrics::new(cfg.text_opts.font_size, cfg.get_paragraph_spacing()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size = indent as f32 * (cfg.bullet_indent_em * cfg.font_size);
+            let indent_size = indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
 
             // * Update our available_width based on the indent and prefix-length
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding) - indent_size;
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right) - indent_size;
 
             let prefix = format!("{}. ", number);
 
@@ -378,15 +309,15 @@ pub fn styled_line_to_layout(
             LayoutResult::Line(LayoutLine {
                 buffer,
                 segments: segments.clone(),
-                font_size: cfg.font_size,
+                font_size: cfg.text_opts.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
-                margin_top: cfg.paragraph_spacing(),
-                margin_bottom: cfg.paragraph_spacing(),
+                margin_top: cfg.get_paragraph_spacing(),
+                margin_bottom: cfg.get_paragraph_spacing(),
             })
         }
         StyledLine::Blank => LayoutResult::Blank {
-            height: cfg.line_height(),
+            height: cfg.get_line_height(),
         },
         _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
     }
@@ -397,7 +328,7 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
     let mut svg_lines: Vec<String> = Vec::new();
 
     // * Store mutuable vars for our moving offsets.
-    let mut cumulative_y_offset = cfg.top_padding;
+    let mut cumulative_y_offset = cfg.canvas_opts.padding.top;
     // For each layout in our document,
     // Process it into an SVG.
     // The returned values are the formatted SVG, and the last character index in the line and the current Y offset.
@@ -439,18 +370,18 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     let mut run_byte_offset: usize = 0;
 
     for (_idx, run) in layout.buffer.layout_runs().enumerate() {
-        println!("Run Index: {}", _idx);
-        println!("Run Text: {}", run.text);
-        println!("Run Length: {}", run.glyphs.len());
-        println!(
-            "First glyph start: {}",
-            run.glyphs.first().map(|g| g.start).unwrap_or(0)
-        );
-        println!(
-            "Last glyph end: {}",
-            run.glyphs.last().map(|g| g.end).unwrap_or(0)
-        );
-        
+        // println!("Run Index: {}", _idx);
+        // println!("Run Text: {}", run.text);
+        // println!("Run Length: {}", run.glyphs.len());
+        // println!(
+        //     "First glyph start: {}",
+        //     run.glyphs.first().map(|g| g.start).unwrap_or(0)
+        // );
+        // println!(
+        //     "Last glyph end: {}",
+        //     run.glyphs.last().map(|g| g.end).unwrap_or(0)
+        // );
+
         let baseline_y = y_cursor + run.line_y;
 
         let full_text: &String = &layout
@@ -462,7 +393,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
             })
             .collect();
 
-        let current_x = cfg.left_padding + layout.indent_offset; // handle starting offset for the line of text.
+        let current_x = cfg.canvas_opts.padding.left + layout.indent_offset; // handle starting offset for the line of text.
 
         let tspans = process_run(
             &run,
@@ -474,11 +405,12 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
         );
 
         cumulative_y = baseline_y;
-        
-        // ? Cosmic will hold the full line text of a soft-wrapped line in all runs within the layout.
-        // ? Lines with a HardBreak, or newline, at the end will only have the line they are writing's content.
-        // ? Therefore, we use a run_byte_offset for wrapped runs, and do not for soft-wrapped runs.
-        run_byte_offset = if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
+
+        // * Cosmic will hold the full line text of a soft-wrapped line in all runs within the layout.
+        // * Lines with a HardBreak, or newline, at the end will only have the line they are writing's content.
+        // * Therefore, we use a run_byte_offset for wrapped runs, and do not for soft-wrapped runs.
+        run_byte_offset =
+            if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
                 run_byte_offset + run.glyphs.len() + 1
             } else {
                 0
@@ -544,10 +476,10 @@ fn process_run(
         let segment_idx = match segment_range {
             Some(seg) => seg.segment_idx,
             None => {
-                println!("Current text: {}", current_text);
-                panic!(
-                    "Could not find segment index for glyph: {} at index pos: {}",
-                    run.text.chars().nth(glyph.start).unwrap(),
+                //println!("Current text: {}", current_text);
+                unreachable!(
+                    "Glyph at index {} has no matching segment range - \
+                    build_segment_ranges produced incomplete coverage",
                     adjusted_byte_pos
                 );
             }
@@ -605,7 +537,7 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
         .iter()
         .map(|ts| {
             let weight_attr = if ts.weight == Weight::BOLD {
-                r#"font-weight="bold" "#
+                r#"font-weight="bold""#
             } else {
                 ""
             };
@@ -623,14 +555,14 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
                 FamilyOwned::SansSerif => r#"font-family="sans-serif""#.to_string(),
                 FamilyOwned::Serif => r#"font-family="serif""#.to_string(),
                 FamilyOwned::Cursive => r#"font-family="cursive""#.to_string(),
-                FamilyOwned::Fantasy => r#"font-family="fantasy" "#.to_string(),
+                FamilyOwned::Fantasy => r#"font-family="fantasy""#.to_string(),
                 FamilyOwned::Monospace => r#"font-family="monospace""#.to_string(),
             };
 
-            let font_size = format!(r#" font-size="{}px" "#, ts.font_size);
+            let font_size = format!(r#"font-size="{}px""#, ts.font_size);
             // Return a formatted SVG String.
             format!(
-                r#"<tspan {} {} {} {}>{}</tspan>"#,
+                r#"<tspan {} {} {} {}>{}</tspan>"#, // TODO collapse whitespace properly for unused attrs
                 font_size,
                 weight_attr,
                 style_attr,
@@ -847,7 +779,6 @@ mod tests {
         };
 
         let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
-        println!("{}", svg_string);
         assert!(svg_string.contains(&compare_text));
     }
     // * --- build_segment_ranges ---
@@ -937,7 +868,7 @@ mod tests {
     fn styled_line_to_layout_paragraph() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         let paragraph_text = "This is some paragraph text.".to_string();
 
@@ -964,12 +895,12 @@ mod tests {
         };
         // Assert segments match the input StyledLine's segments
         assert_eq!(line.segments, segments);
-        // Assert font_size matches cfg.font_size
-        assert_eq!(line.font_size, cfg.font_size);
+        // Assert font_size matches cfg.text_opts.font_size
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
         // Assert margin_bottom matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
         // Assert prefix_len is 0 (paragraphs have no prefix)
         assert_eq!(line.prefix_len, 0);
         // Assert indent_offset is 0.0 (paragraphs have no indent)
@@ -980,7 +911,7 @@ mod tests {
     fn styled_line_to_layout_paragraph_handles_hard_break() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         let paragraph_text = "This is some paragraph text.".to_string();
 
@@ -1010,12 +941,12 @@ mod tests {
         };
         // Assert segments match the input StyledLine's segments
         assert_eq!(line.segments, segments);
-        // Assert font_size matches cfg.font_size
-        assert_eq!(line.font_size, cfg.font_size);
+        // Assert font_size matches cfg.text_opts.font_size
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_top, cfg.paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
         // Assert margin_bottom matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
         // Assert prefix_len is 0 (paragraphs have no prefix)
         assert_eq!(line.prefix_len, 0);
         // Assert indent_offset is 0.0 (paragraphs have no indent)
@@ -1026,7 +957,7 @@ mod tests {
     fn styled_line_to_layout_header_applies_font_scale() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         let header_text = "# Header".to_string();
 
@@ -1054,9 +985,9 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size * cfg.header_scales[&1]);
-        assert_eq!(line.margin_top, cfg.header_margin_top);
-        assert_eq!(line.margin_bottom, cfg.header_margin_bot);
+        assert_eq!(line.font_size, cfg.text_opts.font_size * cfg.header_opts.header_scales[&1]);
+        assert_eq!(line.margin_top, cfg.header_opts.header_margin_top);
+        assert_eq!(line.margin_bottom,cfg.header_opts.header_margin_bot);
         assert_eq!(line.prefix_len, 0);
         assert_eq!(line.indent_offset, 0.0);
     }
@@ -1065,7 +996,7 @@ mod tests {
     fn styled_line_to_bullet_list_item_applies_prefix_length() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1093,18 +1024,18 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
         assert_eq!(line.indent_offset, 0.0);
-        assert_eq!(line.margin_top, cfg.paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
     }
 
     #[test]
     fn styled_line_to_bullet_list_item_applies_indent_offset() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1132,21 +1063,21 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
         assert_eq!(
             line.indent_offset,
-            3.0 * (cfg.bullet_indent_em * cfg.font_size)
+            3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
-        assert_eq!(line.margin_top, cfg.paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
     }
 
     #[test]
     fn styled_line_to_numbered_list_item_applies_prefix_length() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1177,18 +1108,18 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
-        assert_eq!(line.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
+        assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(line.indent_offset, 0.0);
-        assert_eq!(line.margin_top, cfg.paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
     }
 
     #[test]
     fn styled_line_to_numbered_list_item_applies_indent_offset() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1217,21 +1148,21 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
-        assert_eq!(line.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
+        assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(
             line.indent_offset,
-            2.0 * (cfg.bullet_indent_em * cfg.font_size)
+            2.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
-        assert_eq!(line.margin_top, cfg.paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
     }
 
     #[test]
     fn styled_line_blank_returns_line_height() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
+        let cfg = SvgConfig::new();
 
         // Create a blank StyledLine
         let styled_line_para = StyledLine::Blank;
@@ -1245,6 +1176,6 @@ mod tests {
         let LayoutResult::Blank { height } = layout_result else {
             panic!("Expected LayoutResult::Blank");
         };
-        assert_eq!(height, cfg.line_height());
+        assert_eq!(height, cfg.get_line_height());
     }
 }

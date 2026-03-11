@@ -1,11 +1,7 @@
-use std::{error::Error, path::Path};
-
 use cosmic_text::{
     Family, FontSystem, Style, Weight,
     fontdb::{Database, Query},
 };
-
-use roxmltree::Document;
 
 /// Create a simple FontSystem with default Sans-Serif font derived from tests/fonts.
 pub fn create_default_test_font_system() -> FontSystem {
