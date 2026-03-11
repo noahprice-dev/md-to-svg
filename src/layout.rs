@@ -64,10 +64,10 @@ pub fn styled_line_to_layout(
 
     match line {
         StyledLine::Paragraph { segments } => {
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
             let mut buffer =
-                Buffer::new(font_system, Metrics::new(cfg.font_size, cfg.get_line_height()));
+                Buffer::new(font_system, Metrics::new(cfg.text_opts.font_size, cfg.get_line_height()));
 
             let styled_segments: Vec<(&str, Attrs)> = segments
                 .iter()
@@ -111,7 +111,7 @@ pub fn styled_line_to_layout(
             LayoutResult::Line(LayoutLine {
                 buffer,
                 segments: segments.clone(),
-                font_size: cfg.font_size,
+                font_size: cfg.text_opts.font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
                 margin_top: cfg.get_paragraph_spacing(),
@@ -122,13 +122,13 @@ pub fn styled_line_to_layout(
         StyledLine::Header { segments, level } => {
             // * Depending on the Header indentation, we will need to increase the size of our font.
             // * We store the multipler in a hash-table in our config.
-            let scaled_font_size = cfg.font_size * cfg.header_scales[&level];
+            let scaled_font_size = cfg.text_opts.font_size * cfg.header_opts.header_scales[&level];
 
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding);
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(scaled_font_size, scaled_font_size * cfg.line_height_factor),
+                Metrics::new(scaled_font_size, scaled_font_size * cfg.text_opts.line_height_factor),
             );
 
             let styled_segments: Vec<(&str, Attrs)> = segments
@@ -167,25 +167,25 @@ pub fn styled_line_to_layout(
                 font_size: scaled_font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
-                margin_top: cfg.header_margin_top,
-                margin_bottom: cfg.header_margin_bot,
+                margin_top: cfg.header_opts.header_margin_top,
+                margin_bottom:cfg.header_opts.header_margin_bot,
             })
         }
 
         StyledLine::BulletListItem { segments, indent } => {
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.font_size, cfg.get_paragraph_spacing()),
+                Metrics::new(cfg.text_opts.font_size, cfg.get_paragraph_spacing()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size = indent as f32 * (cfg.bullet_indent_em * cfg.font_size);
+            let indent_size = indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
 
             // * Update our available_width based on the indent and prefix-length
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding) - indent_size;
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right) - indent_size;
 
-            let prefix = format!("{} ", cfg.bullet_char);
+            let prefix = format!("{} ", cfg.text_opts.bullet_char);
 
             let styled_segments: Vec<(String, Attrs)> = segments
                 .iter()
@@ -234,7 +234,7 @@ pub fn styled_line_to_layout(
             LayoutResult::Line(LayoutLine {
                 buffer,
                 segments: segments.clone(),
-                font_size: cfg.font_size,
+                font_size: cfg.text_opts.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
                 margin_top: cfg.get_paragraph_spacing(),
@@ -249,15 +249,15 @@ pub fn styled_line_to_layout(
         } => {
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.font_size, cfg.get_paragraph_spacing()),
+                Metrics::new(cfg.text_opts.font_size, cfg.get_paragraph_spacing()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size = indent as f32 * (cfg.bullet_indent_em * cfg.font_size);
+            let indent_size = indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
 
             // * Update our available_width based on the indent and prefix-length
-            let available_width = cfg.width - (cfg.left_padding + cfg.right_padding) - indent_size;
+            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right) - indent_size;
 
             let prefix = format!("{}. ", number);
 
@@ -310,7 +310,7 @@ pub fn styled_line_to_layout(
             LayoutResult::Line(LayoutLine {
                 buffer,
                 segments: segments.clone(),
-                font_size: cfg.font_size,
+                font_size: cfg.text_opts.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
                 margin_top: cfg.get_paragraph_spacing(),
@@ -329,7 +329,7 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
     let mut svg_lines: Vec<String> = Vec::new();
 
     // * Store mutuable vars for our moving offsets.
-    let mut cumulative_y_offset = cfg.top_padding;
+    let mut cumulative_y_offset = cfg.canvas_opts.padding.top;
     // For each layout in our document,
     // Process it into an SVG.
     // The returned values are the formatted SVG, and the last character index in the line and the current Y offset.
@@ -394,7 +394,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
             })
             .collect();
 
-        let current_x = cfg.left_padding + layout.indent_offset; // handle starting offset for the line of text.
+        let current_x = cfg.canvas_opts.padding.left + layout.indent_offset; // handle starting offset for the line of text.
 
         let tspans = process_run(
             &run,
@@ -896,8 +896,8 @@ mod tests {
         };
         // Assert segments match the input StyledLine's segments
         assert_eq!(line.segments, segments);
-        // Assert font_size matches cfg.font_size
-        assert_eq!(line.font_size, cfg.font_size);
+        // Assert font_size matches cfg.text_opts.font_size
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
         // Assert margin_bottom matches cfg.paragraph_spacing()
@@ -942,8 +942,8 @@ mod tests {
         };
         // Assert segments match the input StyledLine's segments
         assert_eq!(line.segments, segments);
-        // Assert font_size matches cfg.font_size
-        assert_eq!(line.font_size, cfg.font_size);
+        // Assert font_size matches cfg.text_opts.font_size
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
         // Assert margin_bottom matches cfg.paragraph_spacing()
@@ -986,9 +986,9 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size * cfg.header_scales[&1]);
-        assert_eq!(line.margin_top, cfg.header_margin_top);
-        assert_eq!(line.margin_bottom, cfg.header_margin_bot);
+        assert_eq!(line.font_size, cfg.text_opts.font_size * cfg.header_opts.header_scales[&1]);
+        assert_eq!(line.margin_top, cfg.header_opts.header_margin_top);
+        assert_eq!(line.margin_bottom,cfg.header_opts.header_margin_bot);
         assert_eq!(line.prefix_len, 0);
         assert_eq!(line.indent_offset, 0.0);
     }
@@ -1025,7 +1025,7 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
         assert_eq!(line.indent_offset, 0.0);
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
@@ -1064,11 +1064,11 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
         assert_eq!(
             line.indent_offset,
-            3.0 * (cfg.bullet_indent_em * cfg.font_size)
+            3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
         assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
@@ -1109,7 +1109,7 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(line.indent_offset, 0.0);
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
@@ -1149,11 +1149,11 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.font_size);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(
             line.indent_offset,
-            2.0 * (cfg.bullet_indent_em * cfg.font_size)
+            2.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
         assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());

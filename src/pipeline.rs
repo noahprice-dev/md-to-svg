@@ -56,9 +56,9 @@ pub fn process_md_to_svg(
             <rect width="{width}" height="{height}" fill="{bg}"/>
             {text_tags}
             </svg>"#,
-        width = cfg.width,
-        height = cfg.height,
-        bg = cfg.bg_color,
+        width = cfg.canvas_opts.width,
+        height = cfg.canvas_opts.height,
+        bg = cfg.canvas_opts.bg_color,
         text_tags = text_tags.join("\n")
     );
 
