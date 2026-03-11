@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, fs::{self, File}, io::{BufWriter, ErrorKind, Write}, path::Path
+    fs::{self, File}, io::{BufWriter, ErrorKind, Write}, path::Path
 };
 
 use cosmic_text::FontSystem;

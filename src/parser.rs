@@ -1,5 +1,4 @@
 use markdown::mdast::Node;
-use regex::Regex;
 
 use crate::styles::{StyleContext, StyledBlock, StyledLine, StyledSegment};
 
