@@ -26,26 +26,8 @@ impl SvgConfig {
     pub fn new() -> Self {
         SvgConfig {
             canvas_opts: CanvasConfig::default(),
-            text_opts: TypographyConfig {
-                font_size: 16.,
-                line_height_factor: 1.5,
-                paragraph_spacing_em: 0.6,
-                bullet_indent_em: 1.5,
-                bullet_char: char::from_u32(0x2022)
-                    .expect("Should be able to unwrap the character •"),
-            },
-            header_opts: HeaderConfig {
-                header_scales: HashMap::from([
-                    (1, 2.0),
-                    (2, 1.6),
-                    (3, 1.3),
-                    (4, 1.1),
-                    (5, 1.0),
-                    (6, 1.0),
-                ]),
-                header_margin_top: 0.,
-                header_margin_bot: 0.,
-            },
+            text_opts: TypographyConfig::default(),
+            header_opts: HeaderConfig::default(),
         }
     }
     /// Space between discrete text blocks.
@@ -132,24 +114,59 @@ impl Padding {
 
 #[derive(Clone, clap::Args, Serialize, Deserialize)]
 pub struct TypographyConfig {
+    #[arg(long, default_value_t = TypographyConfig::default().font_size)]
     pub font_size: f32,
     // todo expose this as an option to the end user?
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
     /// Space between discrete text blocks. Default 1.5
+    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub line_height_factor: f32,
     /// Space between lines inside of a paragraph.
+    #[arg(long, default_value_t = TypographyConfig::default().paragraph_spacing_em)]
     pub paragraph_spacing_em: f32,
     /// Bullet indentation in em units. Default: 1.5em
+    #[arg(long, default_value_t = TypographyConfig::default().bullet_indent_em)]
     pub bullet_indent_em: f32,
     /// Character to use as unordered list prefix. Require single Char. Default: •
+    #[arg(long, default_value_t = TypographyConfig::default().bullet_char)]
     pub bullet_char: char,
+}
+
+impl Default for TypographyConfig {
+    fn default() -> Self {
+        Self {
+            font_size: 16.,
+            line_height_factor: 1.5,
+            paragraph_spacing_em: 0.6,
+            bullet_indent_em: 1.5,
+            bullet_char: char::from_u32(0x2022)
+                .expect("Should be able to unwrap the character •")
+        }
+    }
 }
 #[derive(Clone, clap::Args, Serialize, Deserialize)]
 pub struct HeaderConfig {
     #[arg(skip)]
     pub header_scales: HashMap<u8, f32>,
+    /// Margin above header in px - Default: 0
+    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_top: f32,
+    /// Margin below header in px - Default: 0
+    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_bot: f32,
+}
+
+impl Default for HeaderConfig {
+    fn default() -> Self {
+        Self { header_scales: HashMap::from([
+                    (1, 2.0),
+                    (2, 1.6),
+                    (3, 1.3),
+                    (4, 1.1),
+                    (5, 1.0),
+                    (6, 1.0),
+                ]), header_margin_top: 0., header_margin_bot: 0. }
+    }
 }
