@@ -66,7 +66,6 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             blocks
         }
         Node::InlineCode(code) => {
-            println!("Inline code");
             context.monospace = true;
             let normalized = code.value.trim_matches('\n').replace("\n", " ").to_string();
 
