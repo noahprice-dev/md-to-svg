@@ -1,18 +1,16 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, str::FromStr};
 
 use crate::MdToSvgError;
 
 // TODO:
-// ? Add config builder
-// ? Move Config sub-struccts into independent structs with Flatten
+// ~~ Add config builder
+// ~~ Move Config sub-struccts into independent structs with Flatten
 // ? Create default config file
 // ? Parse Cli as overrides to ConfigBuilder with suported defaults to unwrap Options
 // ? Use `dirs` crate to derive config location agnostic to OS
 
-#[derive(Builder, Serialize, Deserialize)]
-#[builder(setter(into, strip_option))]
+#[derive(Serialize, Deserialize)]
 pub struct SvgConfig {
     // SVG Canvas Options
     pub canvas_opts: CanvasConfig,

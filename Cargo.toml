@@ -7,7 +7,6 @@ edition = "2024"
 clap = { version = "4.5.60", features = ["derive"] }
 config = {version ="0.15.19", features=["toml"]}
 cosmic-text = "0.17.1"
-derive_builder = "0.20.2"
 dirs = "6.0.0"
 markdown = "1.0.0"
 regex = "1.12.3"
