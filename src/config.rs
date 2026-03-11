@@ -48,7 +48,7 @@ pub struct CanvasConfig {
     pub height: f32,
     #[arg(long, default_value_t = CanvasConfig::default().bg_color)]
     pub bg_color: String,
-    /// CSS-style padding: "10" (all), "10 20" (v h), or "10 20 10 20" (t r b l)
+    /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
     #[arg(long, default_value = "0")]
     pub padding: Padding,
 }
@@ -120,16 +120,16 @@ pub struct TypographyConfig {
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
-    /// Space between discrete text blocks. Default 1.5
+    /// Space between discrete text blocks.
     #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub line_height_factor: f32,
     /// Space between lines inside of a paragraph.
     #[arg(long, default_value_t = TypographyConfig::default().paragraph_spacing_em)]
     pub paragraph_spacing_em: f32,
-    /// Bullet indentation in em units. Default: 1.5em
+    /// Bullet indentation in em units.
     #[arg(long, default_value_t = TypographyConfig::default().bullet_indent_em)]
     pub bullet_indent_em: f32,
-    /// Character to use as unordered list prefix. Require single Char. Default: •
+    /// Character to use as unordered list prefix. Require single character
     #[arg(long, default_value_t = TypographyConfig::default().bullet_char)]
     pub bullet_char: char,
 }
@@ -150,10 +150,10 @@ impl Default for TypographyConfig {
 pub struct HeaderConfig {
     #[arg(skip)]
     pub header_scales: HashMap<u8, f32>,
-    /// Margin above header in px - Default: 0
+    /// Margin above header in px
     #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_top: f32,
-    /// Margin below header in px - Default: 0
+    /// Margin below header in px
     #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_bot: f32,
 }
