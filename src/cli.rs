@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use clap::{Parser};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{CanvasConfig, HeaderConfig, TypographyConfig};
+use crate::config::{CanvasConfig, CanvasOverride, HeaderConfig, HeaderOverride, TypographyConfig, TypographyOverride};
 
-#[derive(Parser, Serialize, Deserialize)]
+#[derive(Parser, Serialize)]
 #[command(version, about, long_about=None)]
 pub struct Cli {
     /// Path to input Markdown file
@@ -15,14 +15,14 @@ pub struct Cli {
     pub preset: Option<PathBuf>,
     
     #[command(flatten)]
-    #[serde(rename="canvas",skip_serializing_if = "Option::is_none")]
-    pub canvas_opts: Option<CanvasConfig>,
+    #[serde(flatten)]
+    pub canvas_opts: CanvasOverride,
     
     #[command(flatten)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub text_opts: Option<TypographyConfig>,
+    #[serde(flatten)]
+    pub text_opts: TypographyOverride,
     
     #[command(flatten)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub header_opts: Option<HeaderConfig>
+    #[serde(flatten)]
+    pub header_opts: HeaderOverride
 }

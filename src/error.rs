@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::{io::{self}, path::PathBuf};
 
 use markdown::message::Message;
 
@@ -6,23 +6,34 @@ use markdown::message::Message;
 pub enum MdToSvgError {
     #[error("input file not found: {0}")]
     InputNotFound(PathBuf),
+    
     #[error("input file not readable: {0}")]
-    InputUnreadable(io::Error),
+    InputUnreadable(PathBuf, io::Error),
+    
     #[error("markdown parse failed: {reason}")]
-    ParseFailed { reason: String },
+    MarkdownParseFailed { reason: String },
+    
     #[error("output file not found: {0}")]
     OutputNotFound(PathBuf),
+    
     #[error("output file not writeable: {0}")]
-    OutputNotWritable(io::Error),
+    OutputNotWritable(PathBuf, io::Error),
+    
     #[error("HTML parse failed: {0}")]
     HtmlParseFailed(String),
-    #[error("md-to-svg configuration load failed: {0}")]
-    // Probably wants some additional context on whats wrong. The current point of failure is unwrapping the bullet character from bytes.
-    ConfigLoadFailure(PathBuf),
+    
+    #[error("md-to-svg configuration not found: {0}")]
+    ConfigNotFound(PathBuf),
+    
+    #[error("Configuration file at path: {0} not readable: {1}")]
+    ConfigNotReadable(PathBuf, io::Error),
+    
+    #[error("Failed to parse configuration file")]
+    ConfigParseFailed(#[from] toml::de::Error),
 }
 
 impl From<Message> for MdToSvgError {
     fn from(msg: Message) -> Self {
-        Self::ParseFailed { reason: msg.reason }
+        Self::MarkdownParseFailed { reason: msg.reason }
     }
 }
