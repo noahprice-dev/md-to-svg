@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use clap::{Parser};
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 
-use crate::config::{CanvasConfig, CanvasOverride, HeaderConfig, HeaderOverride, TypographyConfig, TypographyOverride};
+use crate::config::{CanvasOverride,  HeaderOverride, TypographyOverride};
 
 #[derive(Parser, Serialize)]
 #[command(version, about, long_about=None)]

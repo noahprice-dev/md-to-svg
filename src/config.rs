@@ -9,11 +9,14 @@ use crate::MdToSvgError;
 // ? Create default config file
 // ? Parse Cli as overrides to ConfigBuilder with suported defaults to unwrap Options
 // ? Use `dirs` crate to derive config location agnostic to OS
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PresetConfig {
-    pub canvas: CanvasConfig,
-    pub typography: TypographyConfig,
-    pub headers: HeaderConfig,
+    #[serde(rename(serialize="canvas_opts", deserialize="canvas"))]
+    pub canvas: Option<CanvasOverride>,
+    #[serde(rename(serialize="text_opts", deserialize="typography"))]
+    pub typography: Option<TypographyOverride>,
+    #[serde(rename(serialize="header_opts", deserialize="headers"))]
+    pub headers: Option<HeaderOverride>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -205,16 +208,17 @@ pub fn load_preset_config(preset_path: PathBuf) -> Result<SvgConfig, MdToSvgErro
     })?;
     let preset_config = toml::from_str::<PresetConfig>(&raw_toml)?;
     
-    Ok(SvgConfig::from(preset_config))
+    //Ok(SvgConfig::from(preset_config))
+    todo!()
     
 }
 
 
 // * -- Overrides --
-#[derive(clap::Args, Serialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize)]
 pub struct CanvasOverride {}
 
-#[derive(clap::Args, Serialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize)]
 pub struct TypographyOverride {
     /// Font Size. (default 16)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -242,5 +246,50 @@ pub struct TypographyOverride {
     pub bullet_char: Option<char>
 }
 
-#[derive(clap::Args, Serialize)]
+#[derive(Debug, clap::Args, Serialize, Deserialize)]
 pub struct HeaderOverride {}
+
+
+#[cfg(test)]
+mod tests {
+    use config::Config;
+
+    use crate::config::{PresetConfig, SvgConfig, TypographyOverride};
+
+    
+    // * --- Overrides ---
+    // * Typography Overrides
+    #[test]
+    pub fn typography_override_replaces_single_some_value() {
+        // * Arrange
+        // Type Override with FontSize
+        let typography_override = TypographyOverride {
+            font_size: Some(24.0),
+            line_height_factor: None,
+            paragraph_spacing_em: None,
+            bullet_indent_em: None,
+            bullet_char: None
+        };
+        
+        let preset_config = PresetConfig {
+            typography: Some(typography_override),
+            canvas: None,
+            headers: None,
+        };
+        let default_config = SvgConfig::default();
+        
+        // * Act
+        let combined_settings = Config::builder()
+        .add_source(config::Config::try_from(&default_config).expect("Should be able to add default SvgConfig to ConfigBuilder"))
+        .add_source(config::Config::try_from(&preset_config).expect("Should be able to add modified PresetConfig to ConfigBuilder"))
+        .build()
+        .expect("Should be able to build config from PresetConfig & Default SvgConfig.");
+        
+        // * Assert
+        println!("Basic Settings:{:#?}", &combined_settings);
+        // Verify the font size has changed
+        assert_eq!(combined_settings.get::<f32>("text_opts.font_size").unwrap(), preset_config.typography.unwrap().font_size.unwrap());
+        //?  Verify no other values have changed.
+        assert_eq!(combined_settings.get::<f32>("text_opts.bullet_indent_em").unwrap(), default_config.text_opts.bullet_indent_em);
+    }
+}
