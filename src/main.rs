@@ -8,7 +8,7 @@ use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // * Get default values or Svg Export
-    let default_config = SvgConfig::new();
+    let default_config = SvgConfig::default();
 
     // Derive arguments from Parser
     let cli = Cli::parse();
@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let settings = Config::builder()
     .add_source(config::Config::try_from(&default_config)?)
-    .add_source(config::Config::try_from(cfg_preset)?)
+    //.add_source(config::Config::try_from(cfg_preset)?)
     .add_source(config::Config::try_from(&cli)?)
     .build()?;
 

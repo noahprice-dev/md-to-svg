@@ -27,15 +27,6 @@ pub struct SvgConfig {
 }
 
 impl SvgConfig {
-    // / Create an SvgConfig with default values.
-    // / Notably: 800px high by 600px wide, font size 16px, no padding, white background.
-    pub fn new() -> Self {
-        SvgConfig {
-            canvas_opts: CanvasConfig::default(),
-            text_opts: TypographyConfig::default(),
-            header_opts: HeaderConfig::default(),
-        }
-    }
     /// Space between discrete text blocks.
     pub const fn get_line_height(&self) -> f32 {
         self.text_opts.font_size * self.text_opts.line_height_factor
@@ -46,11 +37,23 @@ impl SvgConfig {
     }
 }
 
-impl From<PresetConfig> for SvgConfig {
-    fn from(preset_config: PresetConfig) -> Self {
-        Self { canvas_opts: preset_config.canvas, text_opts: preset_config.typography, header_opts: preset_config.headers }
+impl Default for SvgConfig{
+    // / Create an SvgConfig with default values.
+    // / Notably: 800px high by 600px wide, font size 16px, no padding, white background.
+    fn default() -> Self {
+        SvgConfig {
+            canvas_opts: CanvasConfig::default(),
+            text_opts: TypographyConfig::default(),
+            header_opts: HeaderConfig::default(),
+        }
     }
 }
+
+// impl From<PresetConfig> for SvgConfig {
+//     fn from(preset_config: PresetConfig) -> Self {
+//         Self { canvas_opts: preset_config.canvas, text_opts: preset_config.typography, header_opts: preset_config.headers }
+//     }
+// }
 
 #[derive(Debug, Clone, clap::Args, Serialize, Deserialize)]
 pub struct CanvasConfig {

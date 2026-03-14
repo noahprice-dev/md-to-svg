@@ -868,7 +868,7 @@ mod tests {
     fn styled_line_to_layout_paragraph() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         let paragraph_text = "This is some paragraph text.".to_string();
 
@@ -911,7 +911,7 @@ mod tests {
     fn styled_line_to_layout_paragraph_handles_hard_break() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         let paragraph_text = "This is some paragraph text.".to_string();
 
@@ -957,7 +957,7 @@ mod tests {
     fn styled_line_to_layout_header_applies_font_scale() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         let header_text = "# Header".to_string();
 
@@ -996,7 +996,7 @@ mod tests {
     fn styled_line_to_bullet_list_item_applies_prefix_length() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1035,7 +1035,7 @@ mod tests {
     fn styled_line_to_bullet_list_item_applies_indent_offset() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1077,7 +1077,7 @@ mod tests {
     fn styled_line_to_numbered_list_item_applies_prefix_length() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1119,7 +1119,7 @@ mod tests {
     fn styled_line_to_numbered_list_item_applies_indent_offset() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         let header_text = "- Bullet Item".to_string();
 
@@ -1162,7 +1162,7 @@ mod tests {
     fn styled_line_blank_returns_line_height() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::new();
+        let cfg = SvgConfig::default();
 
         // Create a blank StyledLine
         let styled_line_para = StyledLine::Blank;
