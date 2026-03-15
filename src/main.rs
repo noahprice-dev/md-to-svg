@@ -1,5 +1,5 @@
 use clap::Parser;
-use config::{Config, File};
+use config::Config;
 use cosmic_text::FontSystem;
 use md_to_svg::cli::Cli;
 use md_to_svg::config::{SvgConfig, load_preset_config};
