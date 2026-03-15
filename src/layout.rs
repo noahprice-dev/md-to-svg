@@ -119,9 +119,8 @@ pub fn styled_line_to_layout(
         }
 
         StyledLine::Header { segments, level } => {
-            // * Depending on the Header indentation, we will need to increase the size of our font.
-            // * We store the multipler in a hash-table in our config.
-            let scaled_font_size = cfg.text_opts.font_size * cfg.header_opts.header_scales[&level];
+            // ? Depending on the Header level, we will scale our font-size.
+            let scaled_font_size = cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(level);
 
             let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
@@ -985,7 +984,7 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.text_opts.font_size * cfg.header_opts.header_scales[&1]);
+        assert_eq!(line.font_size, cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(1));
         assert_eq!(line.margin_top, cfg.header_opts.header_margin_top);
         assert_eq!(line.margin_bottom,cfg.header_opts.header_margin_bot);
         assert_eq!(line.prefix_len, 0);

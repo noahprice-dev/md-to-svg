@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::{self, File}, io::{self, ErrorKind, Read}, path::PathBuf, str::FromStr};
+use std::{
+    fs::{self},
+    io::ErrorKind,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use crate::MdToSvgError;
 
@@ -11,11 +16,11 @@ use crate::MdToSvgError;
 // ? Use `dirs` crate to derive config location agnostic to OS
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PresetConfig {
-    #[serde(rename(serialize="canvas_opts", deserialize="canvas"))]
+    #[serde(rename(serialize = "canvas_opts", deserialize = "canvas"))]
     pub canvas: Option<CanvasOverride>,
-    #[serde(rename(serialize="text_opts", deserialize="typography"))]
+    #[serde(rename(serialize = "text_opts", deserialize = "typography"))]
     pub typography: Option<TypographyOverride>,
-    #[serde(rename(serialize="header_opts", deserialize="headers"))]
+    #[serde(rename(serialize = "header_opts", deserialize = "headers"))]
     pub headers: Option<HeaderOverride>,
 }
 
@@ -40,7 +45,7 @@ impl SvgConfig {
     }
 }
 
-impl Default for SvgConfig{
+impl Default for SvgConfig {
     // / Create an SvgConfig with default values.
     // / Notably: 800px high by 600px wide, font size 16px, no padding, white background.
     fn default() -> Self {
@@ -58,16 +63,12 @@ impl Default for SvgConfig{
 //     }
 // }
 
-#[derive(Debug, Clone, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanvasConfig {
-    #[arg(long, default_value_t = CanvasConfig::default().width)]
     pub width: f32,
-    #[arg(long, default_value_t = CanvasConfig::default().height)]
     pub height: f32,
-    #[arg(long, default_value_t = CanvasConfig::default().bg_color)]
     pub bg_color: String,
     /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
-    #[arg(long, default_value = "0")]
     pub padding: Padding,
 }
 
@@ -131,26 +132,16 @@ impl Padding {
     }
 }
 
-#[derive(Debug, Clone, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypographyConfig {
-    #[arg(long, default_value_t = TypographyConfig::default().font_size)]
     pub font_size: f32,
-    
     // todo expose this as an option to the end user?
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
-    
-    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub line_height_factor: f32,
-    /// Space between lines inside of a paragraph.
-    #[arg(long, default_value_t = TypographyConfig::default().paragraph_spacing_em)]
     pub paragraph_spacing_em: f32,
-    /// Bullet indentation in em units.
-    #[arg(long, default_value_t = TypographyConfig::default().bullet_indent_em)]
     pub bullet_indent_em: f32,
-    
-    #[arg(long, default_value_t = TypographyConfig::default().bullet_char)]
     pub bullet_char: char,
 }
 
@@ -165,31 +156,57 @@ impl Default for TypographyConfig {
         }
     }
 }
-#[derive(Debug, Clone, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderConfig {
-    #[arg(skip)]
-    pub header_scales: HashMap<u8, f32>,
+    pub header_scales: HeaderScales,
     /// Margin above header in px
-    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_top: f32,
     /// Margin below header in px
-    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_bot: f32,
 }
 
 impl Default for HeaderConfig {
     fn default() -> Self {
         Self {
-            header_scales: HashMap::from([
-                (1, 2.0),
-                (2, 1.6),
-                (3, 1.3),
-                (4, 1.1),
-                (5, 1.0),
-                (6, 1.0),
-            ]),
+            header_scales: HeaderScales::default(),
             header_margin_top: 0.,
             header_margin_bot: 0.,
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeaderScales {
+    pub h1: f32,
+    pub h2: f32,
+    pub h3: f32,
+    pub h4: f32,
+    pub h5: f32,
+    pub h6: f32,
+}
+impl HeaderScales {
+    /// Access the font scaling for a specific Header Level by u8.
+    /// The Markdown AST will only ever give us a value between 1 and 6 inclusive.
+    pub fn scale_for_level(&self, level: u8) -> f32 {
+        match level {
+            1 => self.h1,
+            2 => self.h2,
+            3 => self.h3,
+            4 => self.h4,
+            5 => self.h5,
+            6 => self.h6,
+            _ => unreachable!("Expected a value between 1 and 6 inclusive."),
+        }
+    }
+}
+impl Default for HeaderScales {
+    fn default() -> Self {
+        Self {
+            h1: 2.0,
+            h2: 1.6,
+            h3: 1.3,
+            h4: 1.1,
+            h5: 1.0,
+            h6: 1.0,
         }
     }
 }
@@ -201,18 +218,14 @@ impl Default for HeaderConfig {
 /// - If the underlying TOML is invalid, will return a MdToSvgError::ConfigParseFailed with the underlying `toml` error.
 pub fn load_preset_config(preset_path: PathBuf) -> Result<SvgConfig, MdToSvgError> {
     let raw_toml = fs::read_to_string(&preset_path).map_err(|err| match err.kind() {
-        ErrorKind::NotFound => {
-            MdToSvgError::ConfigNotFound(preset_path)
-        },
-        _=> MdToSvgError::ConfigNotReadable(preset_path, err)
+        ErrorKind::NotFound => MdToSvgError::ConfigNotFound(preset_path),
+        _ => MdToSvgError::ConfigNotReadable(preset_path, err),
     })?;
     let preset_config = toml::from_str::<PresetConfig>(&raw_toml)?;
-    
+
     //Ok(SvgConfig::from(preset_config))
     todo!()
-    
 }
-
 
 // * -- Overrides --
 #[derive(Debug, clap::Args, Serialize, Deserialize)]
@@ -224,31 +237,42 @@ pub struct TypographyOverride {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub font_size: Option<f32>,
-    
+
     /// Space between discrete text blocks.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     pub line_height_factor: Option<f32>,
-    
+
     /// Spacing between lines within a block.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[arg(long="pspace")]
+    #[arg(long = "pspace")]
     pub paragraph_spacing_em: Option<f32>,
-    
+
     /// Bullet indentation in em units.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[arg(long="bindent")]
+    #[arg(long = "bindent")]
     pub bullet_indent_em: Option<f32>,
-    
+
     /// Character to use as unordered list prefix. Requires single character.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
-    pub bullet_char: Option<char>
+    pub bullet_char: Option<char>,
 }
 
 #[derive(Debug, clap::Args, Serialize, Deserialize)]
-pub struct HeaderOverride {}
-
+pub struct HeaderOverride {
+    #[arg(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_scales: Option<HeaderScales>,
+    /// Margin above header in px
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_margin_top: Option<f32>,
+    /// Margin below header in px
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_margin_bot: Option<f32>,
+}
 
 #[cfg(test)]
 mod tests {
@@ -256,7 +280,6 @@ mod tests {
 
     use crate::config::{PresetConfig, SvgConfig, TypographyOverride};
 
-    
     // * --- Overrides ---
     // * Typography Overrides
     #[test]
@@ -268,28 +291,42 @@ mod tests {
             line_height_factor: None,
             paragraph_spacing_em: None,
             bullet_indent_em: None,
-            bullet_char: None
+            bullet_char: None,
         };
-        
+
         let preset_config = PresetConfig {
             typography: Some(typography_override),
             canvas: None,
             headers: None,
         };
         let default_config = SvgConfig::default();
-        
+
         // * Act
         let combined_settings = Config::builder()
-        .add_source(config::Config::try_from(&default_config).expect("Should be able to add default SvgConfig to ConfigBuilder"))
-        .add_source(config::Config::try_from(&preset_config).expect("Should be able to add modified PresetConfig to ConfigBuilder"))
-        .build()
-        .expect("Should be able to build config from PresetConfig & Default SvgConfig.");
-        
+            .add_source(
+                config::Config::try_from(&default_config)
+                    .expect("Should be able to add default SvgConfig to ConfigBuilder"),
+            )
+            .add_source(
+                config::Config::try_from(&preset_config)
+                    .expect("Should be able to add modified PresetConfig to ConfigBuilder"),
+            )
+            .build()
+            .expect("Should be able to build config from PresetConfig & Default SvgConfig.");
+
         // * Assert
         println!("Basic Settings:{:#?}", &combined_settings);
         // Verify the font size has changed
-        assert_eq!(combined_settings.get::<f32>("text_opts.font_size").unwrap(), preset_config.typography.unwrap().font_size.unwrap());
+        assert_eq!(
+            combined_settings.get::<f32>("text_opts.font_size").unwrap(),
+            preset_config.typography.unwrap().font_size.unwrap()
+        );
         //?  Verify no other values have changed.
-        assert_eq!(combined_settings.get::<f32>("text_opts.bullet_indent_em").unwrap(), default_config.text_opts.bullet_indent_em);
+        assert_eq!(
+            combined_settings
+                .get::<f32>("text_opts.bullet_indent_em")
+                .unwrap(),
+            default_config.text_opts.bullet_indent_em
+        );
     }
 }
