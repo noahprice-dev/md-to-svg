@@ -14,17 +14,8 @@ use crate::MdToSvgError;
 // ? Create default config file
 // ? Parse Cli as overrides to ConfigBuilder with suported defaults to unwrap Options
 // ? Use `dirs` crate to derive config location agnostic to OS
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PresetConfig {
-    #[serde(rename(serialize = "canvas_opts", deserialize = "canvas"))]
-    pub canvas: Option<CanvasOverride>,
-    #[serde(rename(serialize = "text_opts", deserialize = "typography"))]
-    pub typography: Option<TypographyOverride>,
-    #[serde(rename(serialize = "header_opts", deserialize = "headers"))]
-    pub headers: Option<HeaderOverride>,
-}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct SvgConfig {
     // SVG Canvas Options
     pub canvas_opts: CanvasConfig,
@@ -57,13 +48,17 @@ impl Default for SvgConfig {
     }
 }
 
-// impl From<PresetConfig> for SvgConfig {
-//     fn from(preset_config: PresetConfig) -> Self {
-//         Self { canvas_opts: preset_config.canvas, text_opts: preset_config.typography, header_opts: preset_config.headers }
-//     }
-// }
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct PresetConfig {
+    #[serde(rename(serialize = "canvas_opts", deserialize = "canvas"))]
+    pub canvas: Option<CanvasOverride>,
+    #[serde(rename(serialize = "text_opts", deserialize = "typography"))]
+    pub typography: Option<TypographyOverride>,
+    #[serde(rename(serialize = "header_opts", deserialize = "headers"))]
+    pub headers: Option<HeaderOverride>,
+}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct CanvasConfig {
     pub width: f32,
     pub height: f32,
@@ -83,7 +78,8 @@ impl Default for CanvasConfig {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
+#[serde(try_from = "&str")]
 pub struct Padding {
     pub top: f32,
     pub right: f32,
@@ -114,7 +110,12 @@ impl FromStr for Padding {
         }
     }
 }
-
+impl TryFrom<&str> for Padding {
+    type Error = MdToSvgError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
 impl Padding {
     pub fn new(top: f32, right: f32, bottom: f32, left: f32) -> Self {
         Self {
@@ -132,7 +133,7 @@ impl Padding {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct TypographyConfig {
     pub font_size: f32,
     // todo expose this as an option to the end user?
@@ -156,7 +157,8 @@ impl Default for TypographyConfig {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct HeaderConfig {
     pub header_scales: HeaderScales,
     /// Margin above header in px
@@ -174,7 +176,8 @@ impl Default for HeaderConfig {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct HeaderScales {
     pub h1: f32,
     pub h2: f32,
@@ -211,27 +214,27 @@ impl Default for HeaderScales {
     }
 }
 
-/// Load an SVG Preset Configuration from a path.
-/// ## Errors
-/// - If the path is invalid, will return MdToSvgError::ConfigNotFound
-/// - If the file cannot be read for another reason (e.g. Busy, invalid permissions) then it will return MdToSvgError::ConfigNotReadable
-/// - If the underlying TOML is invalid, will return a MdToSvgError::ConfigParseFailed with the underlying `toml` error.
-pub fn load_preset_config(preset_path: PathBuf) -> Result<SvgConfig, MdToSvgError> {
-    let raw_toml = fs::read_to_string(&preset_path).map_err(|err| match err.kind() {
-        ErrorKind::NotFound => MdToSvgError::ConfigNotFound(preset_path),
-        _ => MdToSvgError::ConfigNotReadable(preset_path, err),
-    })?;
-    let preset_config = toml::from_str::<PresetConfig>(&raw_toml)?;
+// * -- Overrides --
+#[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
+pub struct CanvasOverride {
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<f32>,
 
-    //Ok(SvgConfig::from(preset_config))
-    todo!()
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<f32>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bg_color: Option<String>,
+    /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub padding: Option<Padding>,
 }
 
-// * -- Overrides --
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
-pub struct CanvasOverride {}
-
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
 pub struct TypographyOverride {
     /// Font Size. (default 16)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -259,7 +262,7 @@ pub struct TypographyOverride {
     pub bullet_char: Option<char>,
 }
 
-#[derive(Debug, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
 pub struct HeaderOverride {
     #[arg(skip)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -272,6 +275,20 @@ pub struct HeaderOverride {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_margin_bot: Option<f32>,
+}
+
+/// Load an SVG Preset Configuration from a path and return a `PresetConfig` to overwrite.
+/// ## Errors
+/// - If the path is invalid, will return MdToSvgError::ConfigNotFound
+/// - If the file cannot be read for another reason (e.g. Busy, invalid permissions) then it will return MdToSvgError::ConfigNotReadable
+/// - If the underlying TOML is invalid, will return a MdToSvgError::ConfigParseFailed with the underlying `toml` error.
+pub fn load_preset_config(preset_path: PathBuf) -> Result<PresetConfig, MdToSvgError> {
+    let raw_toml = fs::read_to_string(&preset_path).map_err(|err| match err.kind() {
+        ErrorKind::NotFound => MdToSvgError::ConfigNotFound(preset_path),
+        _ => MdToSvgError::ConfigNotReadable(preset_path, err),
+    })?;
+
+    Ok(toml::from_str::<PresetConfig>(&raw_toml)?)
 }
 
 #[cfg(test)]
