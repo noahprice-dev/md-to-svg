@@ -11,13 +11,14 @@ pub fn create_default_test_font_system() -> FontSystem {
     let mut db = Database::new();
     // * Load Noto Sans from tests/fonts/
     // ? We load individual static font files because the `dir` level loader fails quietly.
-    db.load_font_file(PathBuf::from(&"tests/fonts/NotoSans-Bold.ttf"))
+    let test_font_path: PathBuf = ["tests","fonts"].iter().collect();
+    db.load_font_file(test_font_path.join("NotoSans-Bold.ttf"))
         .expect("Bold test font should load successfully.");
-    db.load_font_file(PathBuf::from("tests/fonts/NotoSans-BoldItalic.ttf"))
+    db.load_font_file(test_font_path.join("NotoSans-BoldItalic.ttf"))
         .expect("BoldItalic test font should load successfully.");
-    db.load_font_file(PathBuf::from("tests/fonts/NotoSans-Italic.ttf"))
+    db.load_font_file(test_font_path.join("NotoSans-Italic.ttf"))
         .expect("Italic test font should load successfully.");
-    db.load_font_file(PathBuf::from("tests/fonts/NotoSans-Regular.ttf"))
+    db.load_font_file(test_font_path.join("NotoSans-Regular.ttf"))
         .expect("Regular test font should load successfully.");
 
     // override default Sans-Serif on db.
