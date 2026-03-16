@@ -211,7 +211,7 @@ impl HeaderScales {
             4 => self.h4,
             5 => self.h5,
             6 => self.h6,
-            _ => unreachable!("Expected a value between 1 and 6 inclusive."),
+            _ => unreachable!("Expected a value between 1 and 6 inclusive"),
         }
     }
 }
@@ -325,7 +325,7 @@ pub fn load_preset_config(preset_path: PathBuf) -> Result<PresetConfig, MdToSvgE
 mod tests {
     use config::Config;
 
-    use crate::config::{Padding, PresetConfig, SvgConfig, TypographyOverride};
+    use crate::config::{HeaderScales, Padding, PresetConfig, SvgConfig, TypographyOverride};
 
     // * --- Overrides ---
     // * Typography Overrides
@@ -409,17 +409,27 @@ mod tests {
     // * --- Header Scales ---
     
     #[test]
+    
     fn scale_for_level_returns_correct_scale_for_all_valid_levels() {
         // Create a HeaderScales
-        // Retrieve each value into a vec
-        // Compare the vec with the expected vec
+        let header_scales = HeaderScales::default();
+        
+        assert_eq!(header_scales.scale_for_level(1), 2.0);
+        assert_eq!(header_scales.scale_for_level(2), 1.6);
+        assert_eq!(header_scales.scale_for_level(3), 1.3);
+        assert_eq!(header_scales.scale_for_level(4), 1.1);
+        assert_eq!(header_scales.scale_for_level(5), 1.0);
+        assert_eq!(header_scales.scale_for_level(6), 1.0);
+        
+        
     }
     
     #[test]
+    #[should_panic(expected = "Expected a value between 1 and 6 inclusive")]
     fn scale_for_level_panics_on_invalid_level() {
-        // Create a HeaderScales
-        // Ask for a level 99
-        // Expect a failure.
+        let header_scales = HeaderScales::default();
+        
+        header_scales.scale_for_level(99);
     }
     
 }
