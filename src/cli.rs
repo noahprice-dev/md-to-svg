@@ -5,7 +5,7 @@ use serde::{Serialize};
 
 use crate::config::{CanvasOverride,  HeaderOverride, TypographyOverride};
 
-#[derive(Parser, Serialize)]
+#[derive(Parser, Debug)]
 #[command(version, about, long_about=None)]
 pub struct Cli {
     /// Path to input Markdown file
@@ -15,14 +15,17 @@ pub struct Cli {
     pub preset: Option<PathBuf>,
     
     #[command(flatten)]
-    #[serde(flatten)]
+    pub overrides: ConfigOverrides
+}
+
+#[derive(clap::Args, Serialize, Debug)]
+pub struct ConfigOverrides {
+    #[command(flatten)]
     pub canvas_opts: CanvasOverride,
     
     #[command(flatten)]
-    #[serde(flatten)]
     pub text_opts: TypographyOverride,
     
     #[command(flatten)]
-    #[serde(flatten)]
     pub header_opts: HeaderOverride
 }

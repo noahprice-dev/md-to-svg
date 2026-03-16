@@ -50,13 +50,22 @@ impl Default for SvgConfig {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct PresetConfig {
-    #[serde(rename(serialize = "canvas_opts", deserialize = "canvas"), skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename(serialize = "canvas_opts", deserialize = "canvas"),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub canvas: Option<CanvasOverride>,
-    
-    #[serde(rename(serialize = "text_opts", deserialize = "typography"), skip_serializing_if = "Option::is_none")]
+
+    #[serde(
+        rename(serialize = "text_opts", deserialize = "typography"),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub typography: Option<TypographyOverride>,
-    
-    #[serde(rename(serialize = "header_opts", deserialize = "headers"), skip_serializing_if = "Option::is_none")]
+
+    #[serde(
+        rename(serialize = "header_opts", deserialize = "headers"),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub headers: Option<HeaderOverride>,
 }
 
@@ -131,7 +140,7 @@ impl Padding {
     pub fn symmetric(v: f32, h: f32) -> Self {
         Self::new(v, h, v, h)
     }
-    
+
     /// Define a new Padding where all sides are the same.
     pub fn all(padding: f32) -> Self {
         Self::new(padding, padding, padding, padding)
@@ -235,11 +244,17 @@ pub struct CanvasOverride {
     pub bg_color: Option<String>,
     /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
     #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_padding_from_str", default)]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_padding_from_str",
+        default
+    )]
     pub padding: Option<Padding>,
 }
 
-fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Padding>, D::Error> {
+fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Padding>, D::Error> {
     let s = String::deserialize(d)?;
     s.parse::<Padding>()
         .map(Some)
@@ -249,19 +264,19 @@ fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(d: D) -> Result<Optio
 #[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
 pub struct TypographyOverride {
     /// Font Size. (default 16)
-    
+
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f32>,
 
     /// Space between discrete text blocks.
-    
+
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_height_factor: Option<f32>,
 
     /// Spacing between lines within a block.
-    
+
     #[arg(long = "p-space")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paragraph_spacing_em: Option<f32>,
@@ -362,31 +377,49 @@ mod tests {
         );
     }
 
+    // * --- Padding ---
     #[test]
     fn padding_from_str_parses_one_value_applies_to_all_sides() {
         let padding: Padding = "10".parse().unwrap();
-        
+
         assert_eq!(padding, Padding::all(10.0));
     }
-    
+
     #[test]
     fn padding_from_str_parses_two_values_applies_to_vertical_horizontal() {
         let padding: Padding = "10 20".parse().unwrap();
-        
-        assert_eq!(padding, Padding::symmetric(10.0,  20.0));
+
+        assert_eq!(padding, Padding::symmetric(10.0, 20.0));
     }
-    
+
     #[test]
     fn padding_from_str_parses_three_values_applies_to_top_horizontal_bottom() {
         let padding: Padding = "10 20 30".parse().unwrap();
-        
+
         assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 20.0));
     }
-    
-        #[test]
+
+    #[test]
     fn padding_from_str_parses_four_values_applies_each_side_independently() {
         let padding: Padding = "10 20 30 40".parse().unwrap();
-        
+
         assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 40.0));
     }
+    
+    // * --- Header Scales ---
+    
+    #[test]
+    fn scale_for_level_returns_correct_scale_for_all_valid_levels() {
+        // Create a HeaderScales
+        // Retrieve each value into a vec
+        // Compare the vec with the expected vec
+    }
+    
+    #[test]
+    fn scale_for_level_panics_on_invalid_level() {
+        // Create a HeaderScales
+        // Ask for a level 99
+        // Expect a failure.
+    }
+    
 }

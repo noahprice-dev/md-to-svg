@@ -12,23 +12,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Derive arguments from Parser
     let cli = Cli::parse();
-
-    let _cfg_preset = &cli
+    let cfg_preset = &cli
         .preset
         .clone()
         .map(|path| load_preset_config(path))
         .transpose()?;
 
-    let settings = Config::builder()
-    .add_source(config::Config::try_from(&default_config)?)
-    .add_source(config::Config::try_from(&_cfg_preset)?)
-    .add_source(config::Config::try_from(&cli)?)
-    .build()?;
+    let mut builder = Config::builder().add_source(
+        config::Config::try_from(&default_config)
+            .expect("BUG: default config should always serialize"),
+    );
 
+    if let Some(preset) = cfg_preset {
+        builder = builder.add_source(config::Config::try_from(preset).expect(
+            "BUG: PresetConfig should always be serializable if load_preset_config succeeded.",
+        ));
+    }
+
+    let settings = builder
+        .add_source(config::Config::try_from(&cli.overrides).expect("BUG: CLI Overrides should always serialize"))
+        .build()?;
     let svg_cfg: SvgConfig = settings.try_deserialize().unwrap();
-    let mut font_system = FontSystem::new(); // * Detect system fonts and load
 
-    println!("{:#?}", svg_cfg);
+    let mut font_system = FontSystem::new(); // * Detect system fonts and load
 
     let text_tags =
         pipeline::process_md_to_svg(&Path::new(&cli.input_path), &mut font_system, &svg_cfg)?;
