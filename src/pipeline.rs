@@ -18,10 +18,10 @@ pub fn process_md_to_svg(
 
     let raw_text = fs::read_to_string(input_path).map_err(|err| match err.kind() {
         ErrorKind::NotFound => {
-            return MdToSvgError::InputNotFound(input_path.to_path_buf());
+            MdToSvgError::InputNotFound(input_path.to_path_buf())
         }
         // ? Generic case, something went wrong in the input, but we haven't specified it in this match statement.
-        _ => return MdToSvgError::InputUnreadable(err),
+        _ => MdToSvgError::InputUnreadable(input_path.to_path_buf(), err),
     })?;
 
     let md_text = raw_text
@@ -71,7 +71,7 @@ pub fn write_svg_to_file(
 ) -> Result<(), MdToSvgError> {
     let outfile = File::create(output_path).map_err(|err| match err.kind() {
         ErrorKind::NotFound => MdToSvgError::OutputNotFound(output_path.to_path_buf()),
-        _ => MdToSvgError::OutputNotWritable(err),
+        _ => MdToSvgError::OutputNotWritable(output_path.to_path_buf(), err),
     })?;
 
     let mut writer = BufWriter::new(outfile);
@@ -81,7 +81,7 @@ pub fn write_svg_to_file(
     // ? Do we need a more robust error check on the flush here?
     writer
         .flush()
-        .map_err(|err| MdToSvgError::OutputNotWritable(err))?;
+        .map_err(|err| MdToSvgError::OutputNotWritable(output_path.to_path_buf(), err))?;
 
     Ok(())
 }

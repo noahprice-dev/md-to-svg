@@ -1,5 +1,10 @@
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, str::FromStr};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::{
+    fs::{self},
+    io::ErrorKind,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use crate::MdToSvgError;
 
@@ -10,24 +15,17 @@ use crate::MdToSvgError;
 // ? Parse Cli as overrides to ConfigBuilder with suported defaults to unwrap Options
 // ? Use `dirs` crate to derive config location agnostic to OS
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct SvgConfig {
     // SVG Canvas Options
     pub canvas_opts: CanvasConfig,
     // Font & Whitespace Options
     pub text_opts: TypographyConfig,
+    // Header Scale & Margin Options
     pub header_opts: HeaderConfig,
 }
+
 impl SvgConfig {
-    // / Create an SvgConfig with default values.
-    // / Notably: 800px high by 600px wide, font size 16px, no padding, white background.
-    pub fn new() -> Self {
-        SvgConfig {
-            canvas_opts: CanvasConfig::default(),
-            text_opts: TypographyConfig::default(),
-            header_opts: HeaderConfig::default(),
-        }
-    }
     /// Space between discrete text blocks.
     pub const fn get_line_height(&self) -> f32 {
         self.text_opts.font_size * self.text_opts.line_height_factor
@@ -38,16 +36,45 @@ impl SvgConfig {
     }
 }
 
-#[derive(Debug, Clone, clap::Args, Serialize, Deserialize)]
+impl Default for SvgConfig {
+    // / Create an SvgConfig with default values.
+    // / Notably: 800px high by 600px wide, font size 16px, no padding, white background.
+    fn default() -> Self {
+        SvgConfig {
+            canvas_opts: CanvasConfig::default(),
+            text_opts: TypographyConfig::default(),
+            header_opts: HeaderConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct PresetConfig {
+    #[serde(
+        rename(serialize = "canvas_opts", deserialize = "canvas"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub canvas: Option<CanvasOverride>,
+
+    #[serde(
+        rename(serialize = "text_opts", deserialize = "typography"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub typography: Option<TypographyOverride>,
+
+    #[serde(
+        rename(serialize = "header_opts", deserialize = "headers"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub headers: Option<HeaderOverride>,
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct CanvasConfig {
-    #[arg(long, default_value_t = CanvasConfig::default().width)]
     pub width: f32,
-    #[arg(long, default_value_t = CanvasConfig::default().height)]
     pub height: f32,
-    #[arg(long, default_value_t = CanvasConfig::default().bg_color)]
     pub bg_color: String,
     /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
-    #[arg(long, default_value = "0")]
     pub padding: Padding,
 }
 
@@ -62,20 +89,21 @@ impl Default for CanvasConfig {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Padding {
     pub top: f32,
     pub right: f32,
     pub bottom: f32,
     pub left: f32,
 }
+
 impl FromStr for Padding {
     type Err = MdToSvgError;
     fn from_str(s: &str) -> Result<Self, MdToSvgError> {
         let parts: Vec<f32> = s
             .split_whitespace()
             .map(|v| {
-                v.parse().map_err(|_| MdToSvgError::ParseFailed {
+                v.parse().map_err(|_| MdToSvgError::MarkdownParseFailed {
                     reason: format!("Invalid Number: {}", v),
                 })
             })
@@ -86,14 +114,20 @@ impl FromStr for Padding {
             [tb, lr] => Ok(Self::symmetric(*tb, *lr)),
             [t, lr, b] => Ok(Self::new(*t, *lr, *b, *lr)),
             [t, r, b, l] => Ok(Self::new(*t, *r, *b, *l)),
-            _ => Err(MdToSvgError::ParseFailed {
+            _ => Err(MdToSvgError::MarkdownParseFailed {
                 reason: "Padding must have 1, 2, 3 or 4 values.".to_string(),
             }),
         }
     }
 }
-
+impl TryFrom<&str> for Padding {
+    type Error = MdToSvgError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
 impl Padding {
+    /// Define a new Padding in clockwise order: Top, Right, Bottom, Left
     pub fn new(top: f32, right: f32, bottom: f32, left: f32) -> Self {
         Self {
             top,
@@ -102,34 +136,28 @@ impl Padding {
             left,
         }
     }
+    /// Define a new Padding for Vertical then Horizontal
     pub fn symmetric(v: f32, h: f32) -> Self {
         Self::new(v, h, v, h)
     }
+
+    /// Define a new Padding where all sides are the same.
     pub fn all(padding: f32) -> Self {
         Self::new(padding, padding, padding, padding)
     }
 }
 
-#[derive(Clone, clap::Args, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct TypographyConfig {
-    #[arg(long, default_value_t = TypographyConfig::default().font_size)]
     pub font_size: f32,
     // todo expose this as an option to the end user?
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
-    /// Space between discrete text blocks.
-    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub line_height_factor: f32,
-    /// Space between lines inside of a paragraph.
-    #[arg(long, default_value_t = TypographyConfig::default().paragraph_spacing_em)]
     pub paragraph_spacing_em: f32,
-    /// Bullet indentation in em units.
-    #[arg(long, default_value_t = TypographyConfig::default().bullet_indent_em)]
     pub bullet_indent_em: f32,
-    /// Character to use as unordered list prefix. Require single character
-    #[arg(long, default_value_t = TypographyConfig::default().bullet_char)]
-    pub bullet_char: char,
+    pub bullet_char: String,
 }
 
 impl Default for TypographyConfig {
@@ -139,32 +167,269 @@ impl Default for TypographyConfig {
             line_height_factor: 1.5,
             paragraph_spacing_em: 0.6,
             bullet_indent_em: 1.5,
-            bullet_char: char::from_u32(0x2022)
-                .expect("Should be able to unwrap the character •")
+            bullet_char: String::from("•"),
         }
     }
 }
-#[derive(Clone, clap::Args, Serialize, Deserialize)]
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct HeaderConfig {
-    #[arg(skip)]
-    pub header_scales: HashMap<u8, f32>,
+    pub header_scales: HeaderScales,
     /// Margin above header in px
-    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_top: f32,
     /// Margin below header in px
-    #[arg(long, default_value_t = TypographyConfig::default().line_height_factor)]
     pub header_margin_bot: f32,
 }
 
 impl Default for HeaderConfig {
     fn default() -> Self {
-        Self { header_scales: HashMap::from([
-                    (1, 2.0),
-                    (2, 1.6),
-                    (3, 1.3),
-                    (4, 1.1),
-                    (5, 1.0),
-                    (6, 1.0),
-                ]), header_margin_top: 0., header_margin_bot: 0. }
+        Self {
+            header_scales: HeaderScales::default(),
+            header_margin_top: 0.,
+            header_margin_bot: 0.,
+        }
     }
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct HeaderScales {
+    pub h1: f32,
+    pub h2: f32,
+    pub h3: f32,
+    pub h4: f32,
+    pub h5: f32,
+    pub h6: f32,
+}
+impl HeaderScales {
+    /// Access the font scaling for a specific Header Level by u8.
+    /// The Markdown AST will only ever give us a value between 1 and 6 inclusive.
+    pub fn scale_for_level(&self, level: u8) -> f32 {
+        match level {
+            1 => self.h1,
+            2 => self.h2,
+            3 => self.h3,
+            4 => self.h4,
+            5 => self.h5,
+            6 => self.h6,
+            _ => unreachable!("Expected a value between 1 and 6 inclusive"),
+        }
+    }
+}
+impl Default for HeaderScales {
+    fn default() -> Self {
+        Self {
+            h1: 2.0,
+            h2: 1.6,
+            h3: 1.3,
+            h4: 1.1,
+            h5: 1.0,
+            h6: 1.0,
+        }
+    }
+}
+
+// * -- Overrides --
+#[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
+pub struct CanvasOverride {
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<f32>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<f32>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bg_color: Option<String>,
+    /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
+    #[arg(long)]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_padding_from_str",
+        default
+    )]
+    pub padding: Option<Padding>,
+}
+
+fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Padding>, D::Error> {
+    let s = String::deserialize(d)?;
+    s.parse::<Padding>()
+        .map(Some)
+        .map_err(serde::de::Error::custom)
+}
+
+#[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
+pub struct TypographyOverride {
+    /// Font Size. (default 16)
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font_size: Option<f32>,
+
+    /// Space between discrete text blocks.
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_height_factor: Option<f32>,
+
+    /// Spacing between lines within a block.
+
+    #[arg(long = "p-space")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub paragraph_spacing_em: Option<f32>,
+
+    /// Bullet indentation in em units.
+    #[arg(long = "b-indent")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bullet_indent_em: Option<f32>,
+
+    /// String to use as a prefix 'bullet' for unordered lists.
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bullet_char: Option<String>,
+}
+
+#[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
+pub struct HeaderOverride {
+    #[arg(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_scales: Option<HeaderScales>,
+    /// Margin above header in px
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_margin_top: Option<f32>,
+    /// Margin below header in px
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header_margin_bot: Option<f32>,
+}
+
+/// Load an SVG Preset Configuration from a path and return a `PresetConfig` to overwrite.
+/// ## Errors
+/// - If the path is invalid, will return MdToSvgError::ConfigNotFound
+/// - If the file cannot be read for another reason (e.g. Busy, invalid permissions) then it will return MdToSvgError::ConfigNotReadable
+/// - If the underlying TOML is invalid, will return a MdToSvgError::ConfigParseFailed with the underlying `toml` error.
+pub fn load_preset_config(preset_path: PathBuf) -> Result<PresetConfig, MdToSvgError> {
+    let raw_toml = fs::read_to_string(&preset_path).map_err(|err| match err.kind() {
+        ErrorKind::NotFound => MdToSvgError::ConfigNotFound(preset_path),
+        _ => MdToSvgError::ConfigNotReadable(preset_path, err),
+    })?;
+
+    Ok(toml::from_str::<PresetConfig>(&raw_toml)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use config::Config;
+
+    use crate::config::{HeaderScales, Padding, PresetConfig, SvgConfig, TypographyOverride};
+
+    // * --- Overrides ---
+    // * Typography Overrides
+    #[test]
+    fn typography_override_replaces_single_some_value() {
+        // * Arrange
+        // Type Override with FontSize
+        let typography_override = TypographyOverride {
+            font_size: Some(24.0),
+            line_height_factor: None,
+            paragraph_spacing_em: None,
+            bullet_indent_em: None,
+            bullet_char: None,
+        };
+
+        let preset_config = PresetConfig {
+            typography: Some(typography_override),
+            canvas: None,
+            headers: None,
+        };
+        let default_config = SvgConfig::default();
+
+        // * Act
+        let combined_settings = Config::builder()
+            .add_source(
+                config::Config::try_from(&default_config)
+                    .expect("Should be able to add default SvgConfig to ConfigBuilder"),
+            )
+            .add_source(
+                config::Config::try_from(&preset_config)
+                    .expect("Should be able to add modified PresetConfig to ConfigBuilder"),
+            )
+            .build()
+            .expect("Should be able to build config from PresetConfig & Default SvgConfig.");
+
+        // * Assert
+        println!("Basic Settings:{:#?}", &combined_settings);
+        // Verify the font size has changed
+        assert_eq!(
+            combined_settings.get::<f32>("text_opts.font_size").unwrap(),
+            preset_config.typography.unwrap().font_size.unwrap()
+        );
+        //?  Verify no other values have changed.
+        assert_eq!(
+            combined_settings
+                .get::<f32>("text_opts.bullet_indent_em")
+                .unwrap(),
+            default_config.text_opts.bullet_indent_em
+        );
+    }
+
+    // * --- Padding ---
+    #[test]
+    fn padding_from_str_parses_one_value_applies_to_all_sides() {
+        let padding: Padding = "10".parse().unwrap();
+
+        assert_eq!(padding, Padding::all(10.0));
+    }
+
+    #[test]
+    fn padding_from_str_parses_two_values_applies_to_vertical_horizontal() {
+        let padding: Padding = "10 20".parse().unwrap();
+
+        assert_eq!(padding, Padding::symmetric(10.0, 20.0));
+    }
+
+    #[test]
+    fn padding_from_str_parses_three_values_applies_to_top_horizontal_bottom() {
+        let padding: Padding = "10 20 30".parse().unwrap();
+
+        assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 20.0));
+    }
+
+    #[test]
+    fn padding_from_str_parses_four_values_applies_each_side_independently() {
+        let padding: Padding = "10 20 30 40".parse().unwrap();
+
+        assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 40.0));
+    }
+    
+    // * --- Header Scales ---
+    
+    #[test]
+    
+    fn scale_for_level_returns_correct_scale_for_all_valid_levels() {
+        // Create a HeaderScales
+        let header_scales = HeaderScales::default();
+        
+        assert_eq!(header_scales.scale_for_level(1), 2.0);
+        assert_eq!(header_scales.scale_for_level(2), 1.6);
+        assert_eq!(header_scales.scale_for_level(3), 1.3);
+        assert_eq!(header_scales.scale_for_level(4), 1.1);
+        assert_eq!(header_scales.scale_for_level(5), 1.0);
+        assert_eq!(header_scales.scale_for_level(6), 1.0);
+        
+        
+    }
+    
+    #[test]
+    #[should_panic(expected = "Expected a value between 1 and 6 inclusive")]
+    fn scale_for_level_panics_on_invalid_level() {
+        let header_scales = HeaderScales::default();
+        
+        header_scales.scale_for_level(99);
+    }
+    
 }

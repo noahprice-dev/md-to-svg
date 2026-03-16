@@ -13,3 +13,7 @@ regex = "1.12.3"
 roxmltree = "0.21.1"
 serde = {version="1.0.228", features = ["derive"]}
 thiserror = "2.0.18"
+toml = {version="1.0.6", features=["parse", "serde"]}
+
+[dev-dependencies]
+pretty_assertions = "1.4"
