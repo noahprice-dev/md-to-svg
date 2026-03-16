@@ -180,7 +180,7 @@ pub fn styled_line_to_layout(
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
             let indent_size = indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
 
-            // * Update our available_width based on the indent and prefix-length
+            // * Update our available_width based on the indent and padding.
             let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right) - indent_size;
 
             let prefix = format!("{} ", cfg.text_opts.bullet_char);

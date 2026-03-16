@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Derive arguments from Parser
     let cli = Cli::parse();
 
-    let cfg_preset = &cli
+    let _cfg_preset = &cli
         .preset
         .clone()
         .map(|path| load_preset_config(path))
@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let settings = Config::builder()
     .add_source(config::Config::try_from(&default_config)?)
-    //.add_source(config::Config::try_from(cfg_preset)?)
+    .add_source(config::Config::try_from(&_cfg_preset)?)
     .add_source(config::Config::try_from(&cli)?)
     .build()?;
 

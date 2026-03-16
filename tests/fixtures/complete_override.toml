@@ -1,0 +1,24 @@
+[canvas]
+width = 1200
+height = 900
+bg_color = "#02acac"
+padding = "0 10 20 30"
+
+[typography]
+font_size = 36
+line_height_factor = 2
+paragraph_spacing_em = 1.2
+bullet_indent_em = 2
+bullet_char = ">"
+
+[headers]
+header_margin_top = 50
+header_margin_bot = 50
+
+[headers.header_scales]
+h1 = 3.0
+h2 = 2.5
+h3 = 2.0
+h4 = 1.5
+h5 = 1.2
+h6 = 0.8

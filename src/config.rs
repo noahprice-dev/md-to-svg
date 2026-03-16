@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     fs::{self},
     io::ErrorKind,
@@ -50,11 +50,13 @@ impl Default for SvgConfig {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct PresetConfig {
-    #[serde(rename(serialize = "canvas_opts", deserialize = "canvas"))]
+    #[serde(rename(serialize = "canvas_opts", deserialize = "canvas"), skip_serializing_if = "Option::is_none")]
     pub canvas: Option<CanvasOverride>,
-    #[serde(rename(serialize = "text_opts", deserialize = "typography"))]
+    
+    #[serde(rename(serialize = "text_opts", deserialize = "typography"), skip_serializing_if = "Option::is_none")]
     pub typography: Option<TypographyOverride>,
-    #[serde(rename(serialize = "header_opts", deserialize = "headers"))]
+    
+    #[serde(rename(serialize = "header_opts", deserialize = "headers"), skip_serializing_if = "Option::is_none")]
     pub headers: Option<HeaderOverride>,
 }
 
@@ -79,7 +81,6 @@ impl Default for CanvasConfig {
 }
 
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
-#[serde(try_from = "&str")]
 pub struct Padding {
     pub top: f32,
     pub right: f32,
@@ -117,6 +118,7 @@ impl TryFrom<&str> for Padding {
     }
 }
 impl Padding {
+    /// Define a new Padding in clockwise order: Top, Right, Bottom, Left
     pub fn new(top: f32, right: f32, bottom: f32, left: f32) -> Self {
         Self {
             top,
@@ -125,9 +127,12 @@ impl Padding {
             left,
         }
     }
+    /// Define a new Padding for Vertical then Horizontal
     pub fn symmetric(v: f32, h: f32) -> Self {
         Self::new(v, h, v, h)
     }
+    
+    /// Define a new Padding where all sides are the same.
     pub fn all(padding: f32) -> Self {
         Self::new(padding, padding, padding, padding)
     }
@@ -143,7 +148,7 @@ pub struct TypographyConfig {
     pub line_height_factor: f32,
     pub paragraph_spacing_em: f32,
     pub bullet_indent_em: f32,
-    pub bullet_char: char,
+    pub bullet_char: String,
 }
 
 impl Default for TypographyConfig {
@@ -153,7 +158,7 @@ impl Default for TypographyConfig {
             line_height_factor: 1.5,
             paragraph_spacing_em: 0.6,
             bullet_indent_em: 1.5,
-            bullet_char: char::from_u32(0x2022).expect("Should be able to unwrap the character •"),
+            bullet_char: String::from("•"),
         }
     }
 }
@@ -230,36 +235,46 @@ pub struct CanvasOverride {
     pub bg_color: Option<String>,
     /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
     #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_padding_from_str", default)]
     pub padding: Option<Padding>,
+}
+
+fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Padding>, D::Error> {
+    let s = String::deserialize(d)?;
+    s.parse::<Padding>()
+        .map(Some)
+        .map_err(serde::de::Error::custom)
 }
 
 #[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
 pub struct TypographyOverride {
     /// Font Size. (default 16)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f32>,
 
     /// Space between discrete text blocks.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    
     #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub line_height_factor: Option<f32>,
 
     /// Spacing between lines within a block.
+    
+    #[arg(long = "p-space")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[arg(long = "pspace")]
     pub paragraph_spacing_em: Option<f32>,
 
     /// Bullet indentation in em units.
+    #[arg(long = "b-indent")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[arg(long = "bindent")]
     pub bullet_indent_em: Option<f32>,
 
-    /// Character to use as unordered list prefix. Requires single character.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// String to use as a prefix 'bullet' for unordered lists.
     #[arg(long)]
-    pub bullet_char: Option<char>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bullet_char: Option<String>,
 }
 
 #[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
@@ -295,12 +310,12 @@ pub fn load_preset_config(preset_path: PathBuf) -> Result<PresetConfig, MdToSvgE
 mod tests {
     use config::Config;
 
-    use crate::config::{PresetConfig, SvgConfig, TypographyOverride};
+    use crate::config::{Padding, PresetConfig, SvgConfig, TypographyOverride};
 
     // * --- Overrides ---
     // * Typography Overrides
     #[test]
-    pub fn typography_override_replaces_single_some_value() {
+    fn typography_override_replaces_single_some_value() {
         // * Arrange
         // Type Override with FontSize
         let typography_override = TypographyOverride {
@@ -345,5 +360,33 @@ mod tests {
                 .unwrap(),
             default_config.text_opts.bullet_indent_em
         );
+    }
+
+    #[test]
+    fn padding_from_str_parses_one_value_applies_to_all_sides() {
+        let padding: Padding = "10".parse().unwrap();
+        
+        assert_eq!(padding, Padding::all(10.0));
+    }
+    
+    #[test]
+    fn padding_from_str_parses_two_values_applies_to_vertical_horizontal() {
+        let padding: Padding = "10 20".parse().unwrap();
+        
+        assert_eq!(padding, Padding::symmetric(10.0,  20.0));
+    }
+    
+    #[test]
+    fn padding_from_str_parses_three_values_applies_to_top_horizontal_bottom() {
+        let padding: Padding = "10 20 30".parse().unwrap();
+        
+        assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 20.0));
+    }
+    
+        #[test]
+    fn padding_from_str_parses_four_values_applies_each_side_independently() {
+        let padding: Padding = "10 20 30 40".parse().unwrap();
+        
+        assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 40.0));
     }
 }
