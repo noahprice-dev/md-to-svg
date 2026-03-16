@@ -8,8 +8,6 @@ use md_to_svg::{
     },
 };
 
-mod common;
-
 #[test]
 fn partial_preset_overrides_specified_fields_and_preserves_defaults() {
     let preset_cfg = load_preset_config("tests/fixtures/only_padding.toml".into()).unwrap();
