@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use cosmic_text::{
     Family, FontSystem, Style, Weight,
     fontdb::{Database, Query},
@@ -9,13 +11,13 @@ pub fn create_default_test_font_system() -> FontSystem {
     let mut db = Database::new();
     // * Load Noto Sans from tests/fonts/
     // ? We load individual static font files because the `dir` level loader fails quietly.
-    db.load_font_file("tests\\fonts\\NotoSans-Bold.ttf")
+    db.load_font_file(PathBuf::from(&"tests\\fonts\\NotoSans-Bold.ttf"))
         .expect("Bold test font should load successfully.");
-    db.load_font_file("tests\\fonts\\NotoSans-BoldItalic.ttf")
+    db.load_font_file(PathBuf::from("tests\\fonts\\NotoSans-BoldItalic.ttf"))
         .expect("BoldItalic test font should load successfully.");
-    db.load_font_file("tests\\fonts\\NotoSans-Italic.ttf")
+    db.load_font_file(PathBuf::from("tests\\fonts\\NotoSans-Italic.ttf"))
         .expect("Italic test font should load successfully.");
-    db.load_font_file("tests\\fonts\\NotoSans-Regular.ttf")
+    db.load_font_file(PathBuf::from("tests\\fonts\\NotoSans-Regular.ttf"))
         .expect("Regular test font should load successfully.");
 
     // override default Sans-Serif on db.
