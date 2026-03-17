@@ -154,8 +154,8 @@ pub struct TypographyConfig {
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
-    pub line_height_factor: f32,
-    pub paragraph_spacing_em: f32,
+    pub line_height_factor: f32, // TODO standardize this name and use with `paragraph_spacing` - This should handle spacing between individual lines within a paragraph,
+    pub paragraph_spacing_em: f32, // TODO this should handle spacing between discrete text blocks.
     pub bullet_indent_em: f32,
     pub bullet_char: String,
 }
@@ -285,8 +285,8 @@ pub struct TypographyOverride {
     #[arg(long = "b-indent")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_indent_em: Option<f32>,
-
-    /// String to use as a prefix 'bullet' for unordered lists.
+    
+    /// String to use as a prefix 'bullet' for unordered lists. (Default "•")
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_char: Option<String>,

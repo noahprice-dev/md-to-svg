@@ -66,7 +66,7 @@ pub fn styled_line_to_layout(
             let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
             let mut buffer =
-                Buffer::new(font_system, Metrics::new(cfg.text_opts.font_size, cfg.get_line_height()));
+                Buffer::new(font_system, Metrics::new(cfg.text_opts.font_size, cfg.get_paragraph_spacing()));
 
             let styled_segments: Vec<(&str, Attrs)> = segments
                 .iter()
@@ -126,7 +126,7 @@ pub fn styled_line_to_layout(
 
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(scaled_font_size, scaled_font_size * cfg.text_opts.line_height_factor),
+                Metrics::new(scaled_font_size, cfg.get_line_height()),
             );
 
             let styled_segments: Vec<(&str, Attrs)> = segments
@@ -369,18 +369,6 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     let mut run_byte_offset: usize = 0;
 
     for (_idx, run) in layout.buffer.layout_runs().enumerate() {
-        // println!("Run Index: {}", _idx);
-        // println!("Run Text: {}", run.text);
-        // println!("Run Length: {}", run.glyphs.len());
-        // println!(
-        //     "First glyph start: {}",
-        //     run.glyphs.first().map(|g| g.start).unwrap_or(0)
-        // );
-        // println!(
-        //     "Last glyph end: {}",
-        //     run.glyphs.last().map(|g| g.end).unwrap_or(0)
-        // );
-
         let baseline_y = y_cursor + run.line_y;
 
         let full_text: &String = &layout
