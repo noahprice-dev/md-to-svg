@@ -5,7 +5,7 @@ use md_to_svg::styles::{StyledBlock, StyledLine, StyledSegment};
 
 use crate::common::{create_default_test_font_system, normalize_svg_for_comparison};
 
-mod common;
+pub mod common;
 
 #[test]
 fn process_layout_line_paragraph() {
