@@ -7,6 +7,8 @@ Supports:
 - Headers, custom unordered-lists
 - Full control over SVG settings in-line.
 
+Note - currently this tool will default to the system Sans-Serif font and this is not yet configurable.
+
 The intent of this tool is to be as configurable as possible for the end user. See the Roadmap section for a breakdown of currently supported features, as well as planned features for future releases.
 
 ## How to use
@@ -49,7 +51,7 @@ md_to_svg.exe "input_path.md" "output_path.svg" --padding 10 20 30 40
 
 ### Preset Configuration Files
 
-Preset configuration files must be in the .TOML format. A valid Preset file does not need to be a complete override of the default settings. A full Config file for reference can be found [here]() which shows all default settings.
+Preset configuration files must be in the .TOML format. A valid Preset file does not need to be a complete override of the default settings. A full Config file for reference can be found [here](https://github.com/noahprice-dev/md-to-svg/blob/feat/docs/default_config.toml) which shows all default settings.
 
 Note - overrididing Header Scales is only supported via Preset file. We do not support modifying the header-scales from the CLI.
 
@@ -71,6 +73,7 @@ This tool is currently a WIP and moving towards a 1.0 release. The following sec
 - Default configs & directory.
 - Canvas sizing to height based on input text.
 - Transparent backgrounds
+- Configurable font support
 [x] Complete Markdown to Svg pipeline.
 [x] Custom styling configs
 
