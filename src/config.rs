@@ -263,30 +263,29 @@ fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(
 
 #[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
 pub struct TypographyOverride {
-    /// Font Size. (default 16)
-
+    /// Font Size in px (Default 16)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f32>,
 
-    /// Space between discrete text blocks.
-
+    /// Multiplier to adjust the vertical height of the line box (default 1.5)
+    /// This is multiplied by the font-size to create spacing between glyphs within a paragraph.
+    /// ! Needs to be fixed. See struct comment.
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_height_factor: Option<f32>,
 
-    /// Spacing between lines within a block.
-
+    /// ! Needs to be fixed. See struct commment
     #[arg(long = "p-space")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paragraph_spacing_em: Option<f32>,
 
-    /// Bullet indentation in em units.
+    /// Bullet indentation in em units. (Default 2)
     #[arg(long = "b-indent")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_indent_em: Option<f32>,
 
-    /// String to use as a prefix 'bullet' for unordered lists.
+    /// String to use as a prefix 'bullet' for unordered lists. (Default "•")
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_char: Option<String>,

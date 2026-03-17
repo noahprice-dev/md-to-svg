@@ -15,7 +15,7 @@ pub struct Cli {
     pub input_path: PathBuf,
     /// Path to write output SVG file
     pub output_path: PathBuf,
-    /// Optional path to a Preset.toml file.
+    /// Optional path to a [Preset].toml file.
     pub preset_path: Option<PathBuf>,
     
     #[command(flatten)]
