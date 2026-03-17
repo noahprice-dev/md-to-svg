@@ -8,10 +8,11 @@ padding = "0 10 20 30"
 
 [typography]
 font_size = 32
-# Spacing between two discrete paragraphs/blocks
-line_height_factor = 1.5
+
 # Spacing between lines within a paragraph
-paragraph_spacing_em = 1.2
+line_spacing_factor = 1.5
+# Spacing between two discrete paragraphs/blocks
+paragraph_spacing_factor = 1.2
 
 # 'Bullet' indentation in em units.
 bullet_indent_em = 2
