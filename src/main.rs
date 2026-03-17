@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Derive arguments from Parser
     let cli = Cli::parse();
     let cfg_preset = &cli
-        .preset
+        .preset_path
         .clone()
         .map(|path| load_preset_config(path))
         .transpose()?;
