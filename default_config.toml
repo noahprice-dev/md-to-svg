@@ -1,13 +1,13 @@
 [canvas]
-width = 19200
-height = 1280
-bg_color = "#02b4cc"
+width = 600
+height = 800
+bg_color = "#FFFFFF"
 # String value that represents the padding around the SVG Text.
 # Uses CSS-style padding: "10" (all), "10 20" (vertical, horizontal), "10 20 30" (top, horizontal, bottom) or "10 20 10 20" (top right bottom left)
-padding = "0 10 20 30"
+padding = "0"
 
 [typography]
-font_size = 32
+font_size = 16
 # Spacing between two discrete paragraphs/blocks
 line_height_factor = 1.5
 # Spacing between lines within a paragraph
@@ -17,12 +17,12 @@ paragraph_spacing_em = 1.2
 bullet_indent_em = 2
 
 # String value to use as 'bullet' for unordered lists.
-bullet_char = ">"
+bullet_char = "•"
 
 [headers]
 # Margin between the top and bottom of Headers.
-header_margin_top = 50
-header_margin_bot = 50
+header_margin_top = 0
+header_margin_bot = 0
 
 # Header font-size scales for each rank. 
 # e.g. if you have a font size of 16, an h1 (# Header) will have a font size of 24px
@@ -32,4 +32,4 @@ h2 = 1.8
 h3 = 1.5
 h4 = 1.3
 h5 = 1.0
-h6 = 0.8
+h6 = 1.0
