@@ -7,6 +7,8 @@ Supports:
 - Headers, custom unordered-lists
 - Full control over SVG settings in-line.
 
+Note - currently this tool will default to the system Sans-Serif font and this is not yet configurable.
+
 The intent of this tool is to be as configurable as possible for the end user. See the Roadmap section for a breakdown of currently supported features, as well as planned features for future releases.
 
 ## How to use
@@ -71,6 +73,7 @@ This tool is currently a WIP and moving towards a 1.0 release. The following sec
 - Default configs & directory.
 - Canvas sizing to height based on input text.
 - Transparent backgrounds
+- Configurable font support
 [x] Complete Markdown to Svg pipeline.
 [x] Custom styling configs
 
