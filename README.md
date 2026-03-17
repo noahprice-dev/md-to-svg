@@ -49,7 +49,7 @@ md_to_svg.exe "input_path.md" "output_path.svg" --padding 10 20 30 40
 
 ### Preset Configuration Files
 
-Preset configuration files must be in the .TOML format. A valid Preset file does not need to be a complete override of the default settings. A full Config file for reference can be found [here]() which shows all default settings.
+Preset configuration files must be in the .TOML format. A valid Preset file does not need to be a complete override of the default settings. A full Config file for reference can be found [here](https://github.com/noahprice-dev/md-to-svg/blob/feat/docs/default_config.toml) which shows all default settings.
 
 Note - overrididing Header Scales is only supported via Preset file. We do not support modifying the header-scales from the CLI.
 
