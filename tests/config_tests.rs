@@ -89,7 +89,7 @@ fn complete_preset_overrides_all_fields() {
         text_opts: TypographyConfig {
             font_size: 36.,
             line_height_factor: 2.,
-            paragraph_spacing_em: 1.2,
+            paragraph_spacing_factor: 1.2,
             bullet_indent_em: 2.,
             bullet_char: String::from(">"),
         },

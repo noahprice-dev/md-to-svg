@@ -3,9 +3,10 @@ use cosmic_text::{
     Attrs, Buffer, Family, FamilyOwned, FontSystem, LayoutRun, Metrics, Style, Weight,
 };
 
-use crate::{config::SvgConfig, styles::{StyledLine, StyledSegment}};
-
-
+use crate::{
+    config::SvgConfig,
+    styles::{StyledLine, StyledSegment},
+};
 
 #[derive(Debug)]
 pub struct LayoutLine {
@@ -63,10 +64,13 @@ pub fn styled_line_to_layout(
 
     match line {
         StyledLine::Paragraph { segments } => {
-            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
+            let available_width = cfg.canvas_opts.width
+                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
-            let mut buffer =
-                Buffer::new(font_system, Metrics::new(cfg.text_opts.font_size, cfg.get_line_height()));
+            let mut buffer = Buffer::new(
+                font_system,
+                Metrics::new(cfg.text_opts.font_size, cfg.get_line_spacing_factor()),
+            );
 
             let styled_segments: Vec<(&str, Attrs)> = segments
                 .iter()
@@ -113,20 +117,26 @@ pub fn styled_line_to_layout(
                 font_size: cfg.text_opts.font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
-                margin_top: cfg.get_paragraph_spacing(),
-                margin_bottom: cfg.get_paragraph_spacing(),
+                margin_top: cfg.get_paragraph_spacing_factor(),
+                margin_bottom: cfg.get_paragraph_spacing_factor(),
             })
         }
 
         StyledLine::Header { segments, level } => {
             // ? Depending on the Header level, we will scale our font-size.
-            let scaled_font_size = cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(level);
+            let scaled_font_size =
+                cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(level);
 
-            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
+            let available_width = cfg.canvas_opts.width
+                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
+            // * Define the size of a the Line Box for this line.
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(scaled_font_size, scaled_font_size * cfg.text_opts.line_height_factor),
+                Metrics::new(
+                    scaled_font_size,
+                    scaled_font_size * cfg.text_opts.line_height_factor,
+                ),
             );
 
             let styled_segments: Vec<(&str, Attrs)> = segments
@@ -166,22 +176,26 @@ pub fn styled_line_to_layout(
                 prefix_len: 0,
                 indent_offset: 0.0,
                 margin_top: cfg.header_opts.header_margin_top,
-                margin_bottom:cfg.header_opts.header_margin_bot,
+                margin_bottom: cfg.header_opts.header_margin_bot,
             })
         }
 
         StyledLine::BulletListItem { segments, indent } => {
+            // * Define the size of a the Line Box for this line.
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.text_opts.font_size, cfg.get_paragraph_spacing()),
+                Metrics::new(cfg.text_opts.font_size, cfg.get_line_spacing_factor()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size = indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+            let indent_size =
+                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
 
             // * Update our available_width based on the indent and padding.
-            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right) - indent_size;
+            let available_width = cfg.canvas_opts.width
+                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
+                - indent_size;
 
             let prefix = format!("{} ", cfg.text_opts.bullet_char);
 
@@ -235,8 +249,8 @@ pub fn styled_line_to_layout(
                 font_size: cfg.text_opts.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
-                margin_top: cfg.get_paragraph_spacing(),
-                margin_bottom: cfg.get_paragraph_spacing(),
+                margin_top: cfg.get_paragraph_spacing_factor(),
+                margin_bottom: cfg.get_paragraph_spacing_factor(),
             })
         }
 
@@ -245,17 +259,21 @@ pub fn styled_line_to_layout(
             number,
             indent,
         } => {
+            // * Define the size of a the Line Box for this line.
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.text_opts.font_size, cfg.get_paragraph_spacing()),
+                Metrics::new(cfg.text_opts.font_size, cfg.get_line_spacing_factor()),
             );
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size = indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+            let indent_size =
+                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
 
             // * Update our available_width based on the indent and prefix-length
-            let available_width = cfg.canvas_opts.width - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right) - indent_size;
+            let available_width = cfg.canvas_opts.width
+                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
+                - indent_size;
 
             let prefix = format!("{}. ", number);
 
@@ -311,12 +329,12 @@ pub fn styled_line_to_layout(
                 font_size: cfg.text_opts.font_size,
                 prefix_len: prefix.len(),
                 indent_offset: indent_size,
-                margin_top: cfg.get_paragraph_spacing(),
-                margin_bottom: cfg.get_paragraph_spacing(),
+                margin_top: cfg.get_paragraph_spacing_factor(),
+                margin_bottom: cfg.get_paragraph_spacing_factor(),
             })
         }
         StyledLine::Blank => LayoutResult::Blank {
-            height: cfg.get_line_height(),
+            height: cfg.get_paragraph_spacing_factor(),
         },
         _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
     }
@@ -369,18 +387,6 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     let mut run_byte_offset: usize = 0;
 
     for (_idx, run) in layout.buffer.layout_runs().enumerate() {
-        // println!("Run Index: {}", _idx);
-        // println!("Run Text: {}", run.text);
-        // println!("Run Length: {}", run.glyphs.len());
-        // println!(
-        //     "First glyph start: {}",
-        //     run.glyphs.first().map(|g| g.start).unwrap_or(0)
-        // );
-        // println!(
-        //     "Last glyph end: {}",
-        //     run.glyphs.last().map(|g| g.end).unwrap_or(0)
-        // );
-
         let baseline_y = y_cursor + run.line_y;
 
         let full_text: &String = &layout
@@ -897,9 +903,9 @@ mod tests {
         // Assert font_size matches cfg.text_opts.font_size
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
         // Assert margin_bottom matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
         // Assert prefix_len is 0 (paragraphs have no prefix)
         assert_eq!(line.prefix_len, 0);
         // Assert indent_offset is 0.0 (paragraphs have no indent)
@@ -943,9 +949,9 @@ mod tests {
         // Assert font_size matches cfg.text_opts.font_size
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
         // Assert margin_bottom matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
         // Assert prefix_len is 0 (paragraphs have no prefix)
         assert_eq!(line.prefix_len, 0);
         // Assert indent_offset is 0.0 (paragraphs have no indent)
@@ -984,9 +990,12 @@ mod tests {
         };
 
         assert_eq!(line.segments, segments);
-        assert_eq!(line.font_size, cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(1));
+        assert_eq!(
+            line.font_size,
+            cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(1)
+        );
         assert_eq!(line.margin_top, cfg.header_opts.header_margin_top);
-        assert_eq!(line.margin_bottom,cfg.header_opts.header_margin_bot);
+        assert_eq!(line.margin_bottom, cfg.header_opts.header_margin_bot);
         assert_eq!(line.prefix_len, 0);
         assert_eq!(line.indent_offset, 0.0);
     }
@@ -1026,8 +1035,8 @@ mod tests {
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
         assert_eq!(line.indent_offset, 0.0);
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
     }
 
     #[test]
@@ -1068,8 +1077,8 @@ mod tests {
             line.indent_offset,
             3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
     }
 
     #[test]
@@ -1110,8 +1119,8 @@ mod tests {
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(line.indent_offset, 0.0);
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
     }
 
     #[test]
@@ -1153,8 +1162,8 @@ mod tests {
             line.indent_offset,
             2.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing());
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
     }
 
     #[test]
@@ -1175,6 +1184,6 @@ mod tests {
         let LayoutResult::Blank { height } = layout_result else {
             panic!("Expected LayoutResult::Blank");
         };
-        assert_eq!(height, cfg.get_line_height());
+        assert_eq!(height, cfg.get_paragraph_spacing_factor());
     }
 }
