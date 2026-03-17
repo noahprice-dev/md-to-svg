@@ -1,5 +1,5 @@
 # Markdown to Svg Converter
-A highly configurable Markdownt to SVG Converter written in Rust.
+A highly configurable Markdown to SVG Converter written in Rust.
 
 Supports:
 - Text Wrapping
