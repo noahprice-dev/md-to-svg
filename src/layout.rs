@@ -1184,6 +1184,6 @@ mod tests {
         let LayoutResult::Blank { height } = layout_result else {
             panic!("Expected LayoutResult::Blank");
         };
-        assert_eq!(height, cfg.get_line_spacing_factor());
+        assert_eq!(height, cfg.get_paragraph_spacing_factor());
     }
 }
