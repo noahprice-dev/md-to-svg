@@ -26,13 +26,13 @@ pub struct SvgConfig {
 }
 
 impl SvgConfig {
-    /// Space between discrete text blocks.
-    pub const fn get_line_height(&self) -> f32 {
+    /// Space between lines inside of a paragraph.
+    pub const fn get_line_spacing_factor(&self) -> f32 {
         self.text_opts.font_size * self.text_opts.line_height_factor
     }
-    /// Space between lines inside of a paragraph.
-    pub const fn get_paragraph_spacing(&self) -> f32 {
-        self.text_opts.font_size * self.text_opts.paragraph_spacing_em
+    /// Space between discrete paragraphs or blocks of text.
+    pub const fn get_paragraph_spacing_factor(&self) -> f32 {
+        self.text_opts.font_size * self.text_opts.paragraph_spacing_factor
     }
 }
 
@@ -154,8 +154,8 @@ pub struct TypographyConfig {
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
-    pub line_height_factor: f32, // TODO standardize this name and use with `paragraph_spacing` - This should handle spacing between individual lines within a paragraph,
-    pub paragraph_spacing_em: f32, // TODO this should handle spacing between discrete text blocks.
+    pub line_height_factor: f32, 
+    pub paragraph_spacing_factor: f32,
     pub bullet_indent_em: f32,
     pub bullet_char: String,
 }
@@ -164,8 +164,8 @@ impl Default for TypographyConfig {
     fn default() -> Self {
         Self {
             font_size: 16.,
-            line_height_factor: 1.5,
-            paragraph_spacing_em: 0.6,
+            line_height_factor: 1.15,
+            paragraph_spacing_factor: 1.2,
             bullet_indent_em: 1.5,
             bullet_char: String::from("•"),
         }
@@ -185,8 +185,8 @@ impl Default for HeaderConfig {
     fn default() -> Self {
         Self {
             header_scales: HeaderScales::default(),
-            header_margin_top: 0.,
-            header_margin_bot: 0.,
+            header_margin_top: 10.,
+            header_margin_bot: 10.,
         }
     }
 }
@@ -239,6 +239,7 @@ pub struct CanvasOverride {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<f32>,
 
+    /// Background color declaration in Hex code. Must include '#'. (Default white | "#FFFFFF")
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bg_color: Option<String>,
@@ -252,36 +253,24 @@ pub struct CanvasOverride {
     pub padding: Option<Padding>,
 }
 
-fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(
-    d: D,
-) -> Result<Option<Padding>, D::Error> {
-    let s = String::deserialize(d)?;
-    s.parse::<Padding>()
-        .map(Some)
-        .map_err(serde::de::Error::custom)
-}
-
 #[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
 pub struct TypographyOverride {
     /// Font Size. (default 16)
-
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f32>,
 
-    /// Space between discrete text blocks.
-
+    /// Space between lines within a paragraph (default 1.15)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub line_height_factor: Option<f32>,
 
-    /// Spacing between lines within a block.
-
+    /// Spacing between lines within a block. (Default 1.2)
     #[arg(long = "p-space")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub paragraph_spacing_em: Option<f32>,
 
-    /// Bullet indentation in em units.
+    /// Bullet indentation in em units. (Default 1.5)
     #[arg(long = "b-indent")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_indent_em: Option<f32>,
@@ -297,11 +286,11 @@ pub struct HeaderOverride {
     #[arg(skip)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_scales: Option<HeaderScales>,
-    /// Margin above header in px
+    /// Margin above header in px. (Default 10.0)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_margin_top: Option<f32>,
-    /// Margin below header in px
+    /// Margin below header in px. (Default 10.0)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_margin_bot: Option<f32>,
@@ -319,6 +308,16 @@ pub fn load_preset_config(preset_path: PathBuf) -> Result<PresetConfig, MdToSvgE
     })?;
 
     Ok(toml::from_str::<PresetConfig>(&raw_toml)?)
+}
+
+/// Handle deserializing CSS Style padding declaration from strings.
+fn deserialize_padding_from_str<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<Padding>, D::Error> {
+    let s = String::deserialize(d)?;
+    s.parse::<Padding>()
+        .map(Some)
+        .map_err(serde::de::Error::custom)
 }
 
 #[cfg(test)]
