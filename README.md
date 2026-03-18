@@ -70,18 +70,18 @@ Note - overrididing Header Scales is only supported via Preset file. We do not s
 This tool is currently a WIP and moving towards a 1.0 release. The following sections iterate, in no particular order, what the milestones for the next release will be.
 ### 1.0 Release
 - Docs
-- Default configs & directory.
+- Full OpenMark spec support
 - Canvas sizing to height based on input text.
+- Add String type wrapper for HexCode to verify typing.
 - Transparent backgrounds
-- Configurable font support
 [x] Complete Markdown to Svg pipeline.
 [x] Custom styling configs
 
 ### 1.1
-- Full OpenMark spec support
-- Add String type wrapper for HexCode to verify typing.
-- Debug renderer for Canvas sizing, etc.
+- Default configs & directory.
+- Configurable font support
 - Vector-based text rendering for non-latin scripts
+- Debug renderer for Canvas sizing, etc.
 - Sub/Superscript, Strikethrough, text color styling
 
 ### Future Ideas
