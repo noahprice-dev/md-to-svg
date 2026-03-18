@@ -35,6 +35,7 @@ impl StyledLeafBlock {
     }
 }
 
+/// A Styled Segment is a run of text within some Container Block with some consistent style
 #[derive(Clone, Debug, PartialEq)]
 pub enum StyledSegment {
     Text(StyledLeafBlock),

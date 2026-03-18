@@ -381,14 +381,15 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
 
                 cumulative_y_offset = updated_y + gap;
             }
-            LayoutResult::ThematicBreak{left, right} => {
-                svg_lines.extend(vec![create_thematic_break(*left, *right,
+            LayoutResult::ThematicBreak { left, right } => {
+                svg_lines.extend(vec![create_thematic_break(
+                    *left,
+                    *right,
                     cumulative_y_offset,
                 )]);
 
                 cumulative_y_offset = cumulative_y_offset + cfg.get_paragraph_spacing_factor();
             }
-            // TODO - we don't need to take height here since it is defined in cfg.
             LayoutResult::Blank { height } => {
                 cumulative_y_offset = cumulative_y_offset + height;
             }
@@ -558,12 +559,6 @@ fn process_run(
     tspans
 }
 
-/// Create a Horizontal Line/Thematic Break.
-fn create_thematic_break(left: f32, right:f32, y: f32) -> String {
-    // define svg: </hr> at position
-    format!(r#"<line x1="{left}" y1="{y}" x2="{right}" y2="{y}" stroke="black" />"#)
-}
-
 /// Convert a `Tspan` into a raw SVG string  by a <text> tag.
 fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
     let tspan_strings: Vec<String> = tspans
@@ -611,6 +606,13 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
         tspan_strings.join("")
     )
 }
+
+/// Create a Horizontal Line/Thematic Break.
+fn create_thematic_break(left: f32, right: f32, y: f32) -> String {
+    // define svg: </hr> at position
+    format!(r#"<line x1="{left}" y1="{y}" x2="{right}" y2="{y}" stroke="black" />"#)
+}
+
 ///  Precompute the text range of our StyledBlock text as a byte range, which matches with the Cosmic Glyph start/end indices.
 fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
     let mut ranges = Vec::new();
