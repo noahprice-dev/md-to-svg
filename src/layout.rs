@@ -77,7 +77,6 @@ pub fn styled_line_to_layout(
                 .flat_map(|seg| {
                     match seg {
                         StyledSegment::Text(block) => {
-                            //styled_blocks.push(block.clone());
                             vec![(
                                 block.text.as_str(),
                                 Attrs::new()
@@ -333,9 +332,20 @@ pub fn styled_line_to_layout(
                 margin_bottom: cfg.get_paragraph_spacing_factor(),
             })
         }
+
         StyledLine::Blank => LayoutResult::Blank {
             height: cfg.get_paragraph_spacing_factor(),
         },
+
+        StyledLine::Blockquote { text } => todo!(),
+        StyledLine::Link { text, url, title } => todo!(),
+        StyledLine::Image {
+            description,
+            url,
+            title,
+        } => todo!(),
+        StyledLine::HorizontalRule => todo!(),
+
         _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
     }
 }
@@ -628,7 +638,7 @@ mod tests {
             LayoutResult, SvgConfig, TSpan, build_segment_ranges, styled_line_to_layout,
             tspans_to_svg,
         },
-        styles::{StyledBlock, StyledLine, StyledSegment},
+        styles::{StyledLeafBlock, StyledLine, StyledSegment},
     };
     use cosmic_text::{FamilyOwned, Style, Weight};
 
@@ -792,7 +802,7 @@ mod tests {
         // * Arrange
         let seg_text = "Hello World".to_string();
         // Create a vector of StyledSegments.
-        let segment = vec![StyledSegment::Text(StyledBlock {
+        let segment = vec![StyledSegment::Text(StyledLeafBlock {
             text: seg_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -815,13 +825,13 @@ mod tests {
         let second_segment_text = "World".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: first_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: second_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -844,14 +854,14 @@ mod tests {
         let second_segment_text = "World".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: first_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
             StyledSegment::HardBreak,
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: second_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -877,7 +887,7 @@ mod tests {
 
         let paragraph_text = "This is some paragraph text.".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: paragraph_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -921,7 +931,7 @@ mod tests {
         let paragraph_text = "This is some paragraph text.".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: paragraph_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -966,7 +976,7 @@ mod tests {
 
         let header_text = "# Header".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::BOLD,
             style: Style::Normal,
@@ -1008,7 +1018,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1047,7 +1057,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1089,7 +1099,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1131,7 +1141,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,

@@ -1,6 +1,6 @@
-use markdown::mdast::Node;
+use markdown::mdast::{Node};
 
-use crate::styles::{StyleContext, StyledBlock, StyledLine, StyledSegment};
+use crate::styles::{StyleContext, StyledLeafBlock, StyledLine, StyledSegment};
 
 fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegment> {
     match node {
@@ -33,7 +33,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             let normalized = text.value.trim_matches('\n').replace("\n", " ").to_string();
 
             // This is a final node. We can collapse into a new StyledBlock.
-            vec![StyledSegment::Text(StyledBlock::new(normalized, context))]
+            vec![StyledSegment::Text(StyledLeafBlock::new(normalized, context))]
         }
         Node::Paragraph(para) => {
             let mut blocks = Vec::new();
@@ -61,7 +61,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
                 // * Render the HTML as-is.
                 eprintln!("Warning: Unsupported HTML Tag {}. Rendering as plain text...", html.value.clone());
                 
-                blocks.push(StyledSegment::Text(StyledBlock::new(html.value.clone(), context)));
+                blocks.push(StyledSegment::Text(StyledLeafBlock::new(html.value.clone(), context)));
             }
             blocks
         }
@@ -70,8 +70,9 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             let normalized = code.value.trim_matches('\n').replace("\n", " ").to_string();
 
             // This is a final node. We can collapse into a new StyledBlock.
-            vec![StyledSegment::Text(StyledBlock::new(normalized, context))]
+            vec![StyledSegment::Text(StyledLeafBlock::new(normalized, context))]
         }
+        Node::Link(link) => todo!(),
         Node::Break(_) => {
             vec![StyledSegment::HardBreak]
         }
@@ -82,7 +83,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
                 unknown
             );
             // ? Nodes do not have any single, common typing that I can read in. As well, I have lost the original markdown after parsing, so its impossible to just copy directly.
-            vec![StyledSegment::Text(StyledBlock::new(
+            vec![StyledSegment::Text(StyledLeafBlock::new(
                 format!("{:?}", unknown),
                 context,
             ))]
@@ -120,7 +121,7 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             // todo support HTML tables. This should be part of the table feature impl in a future version.
             let segments = parse_inline_styles(node, StyleContext::default());
             vec![StyledLine::Paragraph { segments: segments }]
-        },
+        }
         Node::List(list) => {
             let mut lines = Vec::new();
             let mut counter = list.start.unwrap_or(1);
@@ -158,7 +159,10 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             }
             lines
         }
-
+        Node::Blockquote(blockquote) => todo!(),
+        Node::ThematicBreak(_) => todo!(),
+        Node::Image(img) => todo!(),
+        
         unknown => {
             eprintln!(
                 "Warning: Unsupported node type: {:#?}. Rendering as plain text..",

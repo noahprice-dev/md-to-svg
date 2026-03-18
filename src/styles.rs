@@ -3,19 +3,17 @@ use cosmic_text::{FamilyOwned, Style, Weight};
 
 
 #[derive(Debug, Clone, PartialEq)]
-// todo support strikethrough - this passes down to the SVG directly.
-/// Settings for a set of glyphs to be rendered.
-/// Family defaults to SansSerif
-// todo can we augment this to use Config defaults as a default? Alternatively use an
-pub struct StyledBlock{
+// TODO (1.1) - Support for strikethrough, sub/superscript.
+/// ? Family defaults to SansSerif
+pub struct StyledLeafBlock{
     pub text: String,
     pub weight: Weight,
     pub style: Style,
     pub family: FamilyOwned,
 }
-impl StyledBlock {
+impl StyledLeafBlock {
     pub fn new(text: String, ctx: StyleContext) -> Self {
-        StyledBlock {
+        StyledLeafBlock {
             text: text,
             weight: if ctx.bold {
                 Weight::BOLD
@@ -39,17 +37,19 @@ impl StyledBlock {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum StyledSegment {
-    Text(StyledBlock),
+    Text(StyledLeafBlock),
     HardBreak
 }
 impl StyledSegment {
     pub fn text(text: String, ctx: StyleContext) -> Self {
-        StyledSegment::Text(StyledBlock::new(text, ctx))
+        StyledSegment::Text(StyledLeafBlock::new(text, ctx))
     }
 }
 // todo incomplete list of missing variants:
-// - Table
+// TODO (1.1) Tables via HTML/GFM
 // - Blockquote
+// - Link
+// - Image
 #[derive(Clone, Debug)]
 pub enum StyledLine {
     Header {
@@ -68,9 +68,22 @@ pub enum StyledLine {
     Paragraph {
         segments: Vec<StyledSegment>,
     },
-    InlineCode {
+    Blockquote{
         text: String,
     },
+    Link{
+        // ? Can be formatted text.
+        text: Vec<StyledLeafBlock>,
+        url: String,
+        title: Option<String>,  
+    },
+    Image {
+        // ? Cannot be formatted text.
+        description: Option<String>,
+        url: String,
+        title: Option<String>
+    },
+    HorizontalRule,
     Blank,
 }
 
@@ -81,7 +94,10 @@ impl StyledLine {
             StyledLine::BulletListItem {..} => String::from("Bullet List Item"),
             StyledLine::NumberedListItem { .. } => String::from("Numbered List Item"),
             StyledLine::Paragraph { .. } => String::from("Paragraph"),
-            StyledLine::InlineCode { ..} => String::from("Code"),
+            StyledLine::Blockquote { .. } => String::from("Blockquote"),
+            StyledLine::Link { ..} => String::from("Link"),
+            StyledLine::Image{..} => String::from("Image"),
+            StyledLine::HorizontalRule => String::from("Horizontal Rule"),
             StyledLine::Blank => String::from("Blank"),
         }
     }
