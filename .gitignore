@@ -8,3 +8,4 @@ test.md
 .vscode
 /scratchpads
 /configs
+!Cargo.lock
