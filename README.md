@@ -70,7 +70,7 @@ Note - overrididing Header Scales is only supported via Preset file. We do not s
 This tool is currently a WIP and moving towards a 1.0 release. The following sections iterate, in no particular order, what the milestones for the next release will be.
 ### 1.0 Release
 - Docs
-- Full OpenMark spec support
+- Full CommonMark 0.31.2 spec support via `markdown_rs`
 - Canvas sizing to height based on input text.
 - Add String type wrapper for HexCode to verify typing.
 - Transparent backgrounds
