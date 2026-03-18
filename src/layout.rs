@@ -21,6 +21,8 @@ pub struct LayoutLine {
 
 pub enum LayoutResult {
     Line(LayoutLine),
+    ThematicBreak,
+    // TODO - remove height var since it is derived from cfg anyway.
     Blank { height: f32 },
 }
 
@@ -28,6 +30,7 @@ impl LayoutResult {
     pub fn margin_top(&self) -> f32 {
         match self {
             LayoutResult::Line(lyt) => lyt.margin_top,
+            LayoutResult::ThematicBreak => 0.0, // Fixed space
             LayoutResult::Blank { .. } => 0.0, // Fixed space
         }
     }
@@ -35,6 +38,7 @@ impl LayoutResult {
     pub fn margin_bottom(&self) -> f32 {
         match self {
             LayoutResult::Line(lyt) => lyt.margin_bottom,
+            LayoutResult::ThematicBreak => 0.0, // Fixed space
             LayoutResult::Blank { .. } => 0.0, // Fixed space
         }
     }
@@ -344,9 +348,7 @@ pub fn styled_line_to_layout(
             url,
             title,
         } => todo!(),
-        StyledLine::HorizontalRule => todo!(),
-
-        _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
+        StyledLine::ThematicBreak => LayoutResult::ThematicBreak,
     }
 }
 
@@ -377,13 +379,20 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
 
                 cumulative_y_offset = updated_y + gap;
             }
-
+            LayoutResult::ThematicBreak => {
+                svg_lines.extend(vec!(create_thematic_break(cfg.canvas_opts.width, cumulative_y_offset)));
+                
+                cumulative_y_offset = cumulative_y_offset + cfg.get_paragraph_spacing_factor();
+                
+            }
+            // TODO - we don't need to take height here since it is defined in cfg.
             LayoutResult::Blank { height } => {
                 cumulative_y_offset = cumulative_y_offset + height;
             }
         }
         // Return final SVG collection.
     }
+    
     svg_lines
 }
 
@@ -544,6 +553,12 @@ fn process_run(
     }
 
     tspans
+}
+
+/// Create a Horizontal Line/Thematic Break.
+fn create_thematic_break(width: f32, y: f32) -> String {
+    // define svg: </hr> at position
+    format!(r#"<line x1="0" y1="{y}" x2="{width}" y2="{y}" stroke="black" />"#)
 }
 
 /// Convert a `Tspan` into a raw SVG string  by a <text> tag.

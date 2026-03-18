@@ -160,7 +160,7 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             lines
         }
         Node::Blockquote(blockquote) => todo!(),
-        Node::ThematicBreak(_) => todo!(),
+        Node::ThematicBreak(_) => {vec![StyledLine::ThematicBreak]}
         Node::Image(img) => todo!(),
         
         unknown => {

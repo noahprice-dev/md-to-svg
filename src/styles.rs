@@ -83,7 +83,7 @@ pub enum StyledLine {
         url: String,
         title: Option<String>
     },
-    HorizontalRule,
+    ThematicBreak,
     Blank,
 }
 
@@ -97,7 +97,7 @@ impl StyledLine {
             StyledLine::Blockquote { .. } => String::from("Blockquote"),
             StyledLine::Link { ..} => String::from("Link"),
             StyledLine::Image{..} => String::from("Image"),
-            StyledLine::HorizontalRule => String::from("Horizontal Rule"),
+            StyledLine::ThematicBreak => String::from("Horizontal Rule"),
             StyledLine::Blank => String::from("Blank"),
         }
     }
