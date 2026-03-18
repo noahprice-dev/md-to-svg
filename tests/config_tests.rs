@@ -92,6 +92,7 @@ fn complete_preset_overrides_all_fields() {
             paragraph_spacing_factor: 1.2,
             bullet_indent_em: 2.,
             bullet_char: String::from(">"),
+            indent_first_bullet: true,
         },
         header_opts: HeaderConfig {
             header_scales: HeaderScales {

@@ -189,8 +189,12 @@ pub fn styled_line_to_layout(
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size =
-                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+            // ? Optionally turn off first bullet indentation
+            let indent_size = if cfg.text_opts.indent_first_bullet {
+                (indent + 1) as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+            } else {
+                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+            };
 
             // * Update our available_width based on the indent and padding.
             let available_width = cfg.canvas_opts.width
@@ -267,8 +271,11 @@ pub fn styled_line_to_layout(
 
             // * Calculate our indent by taking the number of indents and multiplying it by a unit size
             // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size =
-                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+            let indent_size = if cfg.text_opts.indent_first_bullet {
+                (indent + 1) as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+            } else {
+                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+            };
 
             // * Update our available_width based on the indent and prefix-length
             let available_width = cfg.canvas_opts.width
@@ -624,6 +631,7 @@ fn html_escape(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use crate::{
+        config::{CanvasConfig, HeaderConfig, TypographyConfig},
         layout::{
             LayoutResult, SvgConfig, TSpan, build_segment_ranges, styled_line_to_layout,
             tspans_to_svg,
@@ -1033,8 +1041,11 @@ mod tests {
 
         assert_eq!(line.segments, segments);
         assert_eq!(line.font_size, cfg.text_opts.font_size);
-        assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
-        assert_eq!(line.indent_offset, 0.0);
+        assert_eq!(line.prefix_len, 4); // ? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
+        assert_eq!(
+            line.indent_offset,
+            1.0 * cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size
+        ); // ? Handle default indent.
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
         assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
     }
@@ -1075,7 +1086,56 @@ mod tests {
         assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
         assert_eq!(
             line.indent_offset,
-            3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+            4.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? Add an additional indentation for the default bullet
+        );
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+    }
+
+    #[test]
+    fn styled_line_to_bullet_list_item_uses_bullet_indent_configuration() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig {
+            canvas_opts: CanvasConfig::default(),
+            text_opts: TypographyConfig {
+                indent_first_bullet: false,
+                ..TypographyConfig::default()
+            },
+            header_opts: HeaderConfig::default(),
+        };
+
+        let header_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: header_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::BulletListItem {
+            segments: segments.clone(),
+            indent: 3,
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+
+        assert_eq!(line.segments, segments);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
+        assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
+        assert_eq!(
+            line.indent_offset,
+            3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? Do not add first indent
         );
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
         assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
@@ -1118,7 +1178,10 @@ mod tests {
         assert_eq!(line.segments, segments);
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
-        assert_eq!(line.indent_offset, 0.0);
+        assert_eq!(
+            line.indent_offset,
+            1.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+        ); // ? Add an additional indentation for the default bullet);
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
         assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
     }
@@ -1160,7 +1223,57 @@ mod tests {
         assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(
             line.indent_offset,
-            2.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+            3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? Add an additional indentation for the default bullet);
+        );
+        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+    }
+
+    #[test]
+    fn styled_line_to_numbered_list_item_uses_bullet_indent_configuration() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig {
+            canvas_opts: CanvasConfig::default(),
+            text_opts: TypographyConfig {
+                indent_first_bullet: false,
+                ..TypographyConfig::default()
+            },
+            header_opts: HeaderConfig::default(),
+        };
+
+        let header_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledSegment::Text(StyledBlock {
+            text: header_text.clone(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        })];
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledLine::NumberedListItem {
+            segments: segments.clone(),
+            number: 2,
+            indent: 2,
+        };
+
+        // * Act
+        let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+        // * Assert
+        // Assert LayoutResult is the Line variant (not Blank)
+        assert!(matches!(layout_result, LayoutResult::Line(_)));
+        let LayoutResult::Line(line) = layout_result else {
+            panic!("Expected LayoutResult::Line");
+        };
+
+        assert_eq!(line.segments, segments);
+        assert_eq!(line.font_size, cfg.text_opts.font_size);
+        assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+        assert_eq!(
+            line.indent_offset,
+            2.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? Do not add an additional indentation.
         );
         assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
         assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());

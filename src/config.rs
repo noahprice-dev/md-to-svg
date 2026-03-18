@@ -12,9 +12,10 @@ use crate::MdToSvgError;
 // ~~ Add config builder
 // ~~ Move Config sub-struccts into independent structs with Flatten
 // ? Create default config file
-// ? Parse Cli as overrides to ConfigBuilder with suported defaults to unwrap Options
+// ~~ Parse Cli as overrides to ConfigBuilder with suported defaults to unwrap Options
 // ? Use `dirs` crate to derive config location agnostic to OS
 
+// * --- Default Configuration ---
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct SvgConfig {
     // SVG Canvas Options
@@ -24,7 +25,6 @@ pub struct SvgConfig {
     // Header Scale & Margin Options
     pub header_opts: HeaderConfig,
 }
-
 impl SvgConfig {
     /// Space between lines inside of a paragraph.
     pub const fn get_line_spacing_factor(&self) -> f32 {
@@ -35,7 +35,6 @@ impl SvgConfig {
         self.text_opts.font_size * self.text_opts.paragraph_spacing_factor
     }
 }
-
 impl Default for SvgConfig {
     // / Create an SvgConfig with default values.
     // / Notably: 800px high by 600px wide, font size 16px, no padding, white background.
@@ -77,7 +76,6 @@ pub struct CanvasConfig {
     /// CSS-style padding: "10" (all), "10 20" (v h), "10 20 30" (t, h, b) or "10 20 10 20" (t r b l)
     pub padding: Padding,
 }
-
 impl Default for CanvasConfig {
     fn default() -> Self {
         Self {
@@ -158,8 +156,8 @@ pub struct TypographyConfig {
     pub paragraph_spacing_factor: f32,
     pub bullet_indent_em: f32,
     pub bullet_char: String,
+    pub indent_first_bullet: bool,
 }
-
 impl Default for TypographyConfig {
     fn default() -> Self {
         Self {
@@ -168,6 +166,7 @@ impl Default for TypographyConfig {
             paragraph_spacing_factor: 1.2,
             bullet_indent_em: 1.5,
             bullet_char: String::from("•"),
+            indent_first_bullet: true,
         }
     }
 }
@@ -180,7 +179,6 @@ pub struct HeaderConfig {
     /// Margin below header in px
     pub header_margin_bot: f32,
 }
-
 impl Default for HeaderConfig {
     fn default() -> Self {
         Self {
@@ -280,6 +278,10 @@ pub struct TypographyOverride {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_char: Option<String>,
+    
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indent_first_bullet: Option<bool>,
 }
 
 #[derive(Debug, PartialEq, clap::Args, Serialize, Deserialize)]
@@ -339,6 +341,7 @@ mod tests {
             paragraph_spacing_em: None,
             bullet_indent_em: None,
             bullet_char: None,
+            indent_first_bullet: None
         };
 
         let preset_config = PresetConfig {
