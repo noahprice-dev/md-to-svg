@@ -65,7 +65,28 @@ Note - overrididing Header Scales is only supported via Preset file. We do not s
 - `toml` for paring TOML files via `serde`
 
 # Current Functionality
-... table ...
+
+Any items explictly unsupported in this table will print as-is where possible, with warnings in the terminal. Please report any uncaptured failures to process as an Issue in this repo. This tool is in active development, and the below table of support may change!
+
+**A central goal of this project is full CommonMark support. Support for other Markdown flavours is intended but not planned.**
+
+| Block Type                     | Available | Syntax                                                    |
+|--------------------------------|-----------|-----------------------------------------------------------|
+| Header                         | Yes       | `# Header`                                                |
+| Unordered List                 | Yes       | - Item                                                    |
+| Numbered list                  | Yes       | 1. Item                                                   |
+| Paragraph                      | Yes       | Default behaviour                                         |
+| Italic                         | Yes       | `*[text]*`                                                |
+| Bold                           | Yes       | `**[text]**`                                              |
+| Strong Emphasis \| Bold Italic | Yes       | `***[text]***`                                            |
+| Hard Line Break                | Yes       | `\` or `</br>` or `[space][space]`  at the end of a line. |
+| Soft Line Break                | Yes       | Default behaviour                                         |
+| Blockquote                     | No        |                                                           |
+| Link                           | No        |                                                           |
+| Image                          | No        |                                                           |
+| Thematic Break                 | Yes       | `---`                                                     |
+| Html                           | No        |                                                           |
+| Tables                         | No        |                                                           |
 ## Roadmap
 This tool is currently a WIP and moving towards a 1.0 release. The following sections iterate, in no particular order, what the milestones for the next release will be.
 ### 1.0 Release
