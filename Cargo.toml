@@ -1,6 +1,6 @@
 [package]
 name = "md_to_svg"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Highly configurable CLI tool to translate Markdown Documents into SVG files."
 authors = ["Noah Price: nprice@pricemail.ca"]
