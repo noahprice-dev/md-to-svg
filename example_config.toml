@@ -20,6 +20,9 @@ bullet_indent_em = 2
 # String value to use as 'bullet' for unordered lists.
 bullet_char = ">"
 
+# Optionally disable indenting the first bullet of a list
+first_bullet_indent = true
+
 [headers]
 # Margin between the top and bottom of Headers.
 header_margin_top = 50
