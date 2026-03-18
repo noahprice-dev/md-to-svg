@@ -10,6 +10,7 @@ line_height_factor = 2
 paragraph_spacing_em = 1.2
 bullet_indent_em = 2
 bullet_char = ">"
+first_bullet_indent = false
 
 [headers]
 header_margin_top = 50
