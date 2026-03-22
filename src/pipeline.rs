@@ -6,7 +6,7 @@ use cosmic_text::FontSystem;
 use markdown::ParseOptions;
 
 use crate::{
-    MdToSvgError, config::SvgConfig, layout::{LayoutResult, process_layouts, styled_line_to_layout}, parser::parse_blocks
+    MdToSvgError, config::SvgConfig, layout::{LayoutItem, process_layouts, styled_line_to_layout}, parser::parse_blocks
 };
 
 pub fn process_md_to_svg(
@@ -41,7 +41,7 @@ pub fn process_md_to_svg(
     let layout_lines = styled_lines
         .into_iter() //? note into_iter consumes the original!
         .map(|styled_line| styled_line_to_layout(styled_line, font_system, cfg))
-        .collect::<Vec<LayoutResult>>();
+        .collect::<Vec<LayoutItem>>();
 
     let text_tags = process_layouts(layout_lines, cfg);
     

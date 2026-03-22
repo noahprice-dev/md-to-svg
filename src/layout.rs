@@ -1,17 +1,35 @@
-use core::{f32, panic};
+use core::f32;
 use cosmic_text::{
     Attrs, Buffer, Family, FamilyOwned, FontSystem, LayoutRun, Metrics, Style, Weight,
 };
 
 use crate::{
     config::SvgConfig,
-    styles::{StyledLine, StyledSegment},
+    styles::{StyledBlock, StyledInline},
 };
 
+// This should use a From impl that takes in a StyledSpan and adjusts accordingly?
+/// A range of text with a specific style associated with `cosmic_text` style types.
+pub enum LayoutInline {
+    Text {
+        text: String,
+        weight: Weight,
+        style: Style,
+        family: FamilyOwned,
+    },
+    HardBreak, // No data
+    InlineLink {
+        link_text: Vec<LayoutInline>,
+        url: String,
+        title: Option<String>,
+    },
+}
+
+/// Shaped buffer, ready for SVG conversion
 #[derive(Debug)]
-pub struct LayoutLine {
+pub struct LayoutBlock {
     pub buffer: Buffer,
-    pub segments: Vec<StyledSegment>,
+    pub segments: Vec<StyledInline>,
     pub font_size: f32,
     pub prefix_len: usize,
     pub indent_offset: f32,
@@ -19,38 +37,44 @@ pub struct LayoutLine {
     pub margin_bottom: f32,
 }
 
-pub enum LayoutResult {
-    Line(LayoutLine),
+/// A discrete unit of work for the layout engine.
+/// This may be a LayoutBlock or a non-text structural element.
+pub enum LayoutItem {
+    Line(LayoutBlock),
     ThematicBreak { left: f32, right: f32 }, //? Support for creative thematic breaks?
     Blank { height: f32 },
 }
 
-impl LayoutResult {
+impl LayoutItem {
     pub fn margin_top(&self) -> f32 {
         match self {
-            LayoutResult::Line(lyt) => lyt.margin_top,
-            LayoutResult::ThematicBreak { .. } => 0.0, // Fixed space
-            LayoutResult::Blank { .. } => 0.0,         // Fixed space
+            LayoutItem::Line(lyt) => lyt.margin_top,
+            LayoutItem::ThematicBreak { .. } => 0.0, // Fixed space
+            LayoutItem::Blank { .. } => 0.0,         // Fixed space
         }
     }
 
     pub fn margin_bottom(&self) -> f32 {
         match self {
-            LayoutResult::Line(lyt) => lyt.margin_bottom,
-            LayoutResult::ThematicBreak { .. } => 0.0, // Fixed space
-            LayoutResult::Blank { .. } => 0.0,         // Fixed space
+            LayoutItem::Line(lyt) => lyt.margin_bottom,
+            LayoutItem::ThematicBreak { .. } => 0.0, // Fixed space
+            LayoutItem::Blank { .. } => 0.0,         // Fixed space
         }
     }
 }
 
+/// A range of glyph indices in the source text that carry a consistent style.
+/// 
+// ? *This is used to map the result of Cosmic's shaping to the parsed styles, as this is lost during transformation.*
 #[derive(Debug)]
-pub struct SegmentRange {
+pub struct StyledInlineRange {
     segment_idx: usize,
     start_byte: usize,
     end_byte: usize,
 }
 
-pub struct TSpan {
+/// Complete definition of a Text Span SVG element.
+pub struct TspanDefinition {
     text: String,
     font_size: f32,
     weight: Weight,
@@ -59,14 +83,14 @@ pub struct TSpan {
 }
 
 pub fn styled_line_to_layout(
-    line: StyledLine,
+    line: StyledBlock,
     font_system: &mut FontSystem,
     cfg: &SvgConfig,
-) -> LayoutResult {
+) -> LayoutItem {
     // * Arrange our default available width based on the overall SVG size minus any L/R padding.
 
     match line {
-        StyledLine::Paragraph { segments } => {
+        StyledBlock::Paragraph { segments } => {
             let available_width = cfg.canvas_opts.width
                 - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
 
@@ -79,7 +103,7 @@ pub fn styled_line_to_layout(
                 .iter()
                 .flat_map(|seg| {
                     match seg {
-                        StyledSegment::Text(block) => {
+                        StyledInline::Text(block) => {
                             vec![(
                                 block.text.as_str(),
                                 Attrs::new()
@@ -88,7 +112,7 @@ pub fn styled_line_to_layout(
                                     .family(block.family.as_family()),
                             )]
                         }
-                        StyledSegment::HardBreak => {
+                        StyledInline::HardBreak => {
                             // * Since we are updating how we are drawing in Cosmic,
                             // * we also need to reflect that in how we draw with SVG by inserting the same lines.
                             vec![("\n", Attrs::new())]
@@ -113,7 +137,7 @@ pub fn styled_line_to_layout(
             );
             buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
 
-            LayoutResult::Line(LayoutLine {
+            LayoutItem::Line(LayoutBlock {
                 buffer,
                 segments: segments.clone(),
                 font_size: cfg.text_opts.font_size,
@@ -124,7 +148,7 @@ pub fn styled_line_to_layout(
             })
         }
 
-        StyledLine::Header { segments, level } => {
+        StyledBlock::Header { segments, level } => {
             // ? Depending on the Header level, we will scale our font-size.
             let scaled_font_size =
                 cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(level);
@@ -144,13 +168,13 @@ pub fn styled_line_to_layout(
             let styled_segments: Vec<(&str, Attrs)> = segments
                 .iter()
                 .flat_map(|block| match block {
-                    StyledSegment::Text(block) => {
+                    StyledInline::Text(block) => {
                         vec![(
                             block.text.as_str(),
                             Attrs::new().weight(block.weight).style(block.style),
                         )]
                     }
-                    StyledSegment::HardBreak => {
+                    StyledInline::HardBreak => {
                         vec![("\n", Attrs::new())]
                     }
                 })
@@ -171,7 +195,7 @@ pub fn styled_line_to_layout(
 
             buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
 
-            LayoutResult::Line(LayoutLine {
+            LayoutItem::Line(LayoutBlock {
                 buffer,
                 segments: segments.clone(),
                 font_size: scaled_font_size,
@@ -182,7 +206,7 @@ pub fn styled_line_to_layout(
             })
         }
 
-        StyledLine::BulletListItem { segments, indent } => {
+        StyledBlock::BulletListItem { segments, indent } => {
             // * Define the size of a the Line Box for this line.
             let mut buffer = Buffer::new(
                 font_system,
@@ -206,7 +230,7 @@ pub fn styled_line_to_layout(
                 .enumerate()
                 .flat_map(|(i, block)| {
                     match block {
-                        StyledSegment::Text(block) => {
+                        StyledInline::Text(block) => {
                             let text = if i == 0 {
                                 // We need to insert the bullet character here, however we can't simply use format!().as_str
                                 // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
@@ -220,7 +244,7 @@ pub fn styled_line_to_layout(
 
                             vec![(text, attrs)]
                         }
-                        StyledSegment::HardBreak => {
+                        StyledInline::HardBreak => {
                             let text = "\n".to_string();
                             let attrs = Attrs::new();
                             vec![(text, attrs)]
@@ -245,7 +269,7 @@ pub fn styled_line_to_layout(
 
             buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
 
-            LayoutResult::Line(LayoutLine {
+            LayoutItem::Line(LayoutBlock {
                 buffer,
                 segments: segments.clone(),
                 font_size: cfg.text_opts.font_size,
@@ -256,7 +280,7 @@ pub fn styled_line_to_layout(
             })
         }
 
-        StyledLine::NumberedListItem {
+        StyledBlock::NumberedListItem {
             segments,
             number,
             indent,
@@ -284,7 +308,7 @@ pub fn styled_line_to_layout(
                 .enumerate()
                 .flat_map(|(i, block)| {
                     match block {
-                        StyledSegment::Text(block) => {
+                        StyledInline::Text(block) => {
                             let text = if i == 0 {
                                 // We need to insert the bullet character here, however we can't simply use format!().as_str
                                 // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
@@ -298,7 +322,7 @@ pub fn styled_line_to_layout(
 
                             vec![(text, attrs)]
                         }
-                        StyledSegment::HardBreak => {
+                        StyledInline::HardBreak => {
                             let text = "\n".to_string();
                             let attrs = Attrs::new();
                             vec![(text, attrs)]
@@ -325,7 +349,7 @@ pub fn styled_line_to_layout(
             // * Our height is unbounded because we are not testing for vertical space, as each line is run on a different Buffer.
             buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
 
-            LayoutResult::Line(LayoutLine {
+            LayoutItem::Line(LayoutBlock {
                 buffer,
                 segments: segments.clone(),
                 font_size: cfg.text_opts.font_size,
@@ -336,25 +360,25 @@ pub fn styled_line_to_layout(
             })
         }
 
-        StyledLine::Blank => LayoutResult::Blank {
+        StyledBlock::Blank => LayoutItem::Blank {
             height: cfg.get_paragraph_spacing_factor(),
         },
 
-        StyledLine::Blockquote { text } => todo!(),
-        StyledLine::Link { text, url, title } => todo!(),
-        StyledLine::Image {
+        StyledBlock::Blockquote { text } => todo!(),
+        StyledBlock::Link { text, url, title } => todo!(),
+        StyledBlock::Image {
             description,
             url,
             title,
         } => todo!(),
-        StyledLine::ThematicBreak => LayoutResult::ThematicBreak {
+        StyledBlock::ThematicBreak => LayoutItem::ThematicBreak {
             left: cfg.canvas_opts.padding.left,
             right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,
         },
     }
 }
 
-pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<String> {
+pub fn process_layouts(layouts: Vec<LayoutItem>, cfg: &SvgConfig) -> Vec<String> {
     // * Return value
     let mut svg_lines: Vec<String> = Vec::new();
 
@@ -369,7 +393,7 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
 
     while let Some(layout) = iter.next() {
         match &layout {
-            LayoutResult::Line(lyt) => {
+            LayoutItem::Line(lyt) => {
                 let (svgs, updated_y) = process_layout_line(lyt, cumulative_y_offset, cfg);
                 svg_lines.extend(svgs);
 
@@ -381,7 +405,7 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
 
                 cumulative_y_offset = updated_y + gap;
             }
-            LayoutResult::ThematicBreak { left, right } => {
+            LayoutItem::ThematicBreak { left, right } => {
                 svg_lines.extend(vec![create_thematic_break(
                     *left,
                     *right,
@@ -390,7 +414,7 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
 
                 cumulative_y_offset = cumulative_y_offset + cfg.get_paragraph_spacing_factor();
             }
-            LayoutResult::Blank { height } => {
+            LayoutItem::Blank { height } => {
                 cumulative_y_offset = cumulative_y_offset + height;
             }
         }
@@ -400,12 +424,12 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
     svg_lines
 }
 
-fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (Vec<String>, f32) {
+fn process_layout_line(layout: &LayoutBlock, y_cursor: f32, cfg: &SvgConfig) -> (Vec<String>, f32) {
     let mut svg_elements: Vec<String> = Vec::new();
     let mut cumulative_y = y_cursor;
 
     // * Build our Segment Map for this LayoutLine.
-    let segment_ranges = build_segment_ranges(&layout.segments);
+    let segment_ranges = build_styled_inline_ranges(&layout.segments);
 
     let mut run_byte_offset: usize = 0;
 
@@ -416,8 +440,8 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
             .segments
             .iter()
             .map(|seg| match seg {
-                StyledSegment::Text(block) => block.text.clone(),
-                StyledSegment::HardBreak => "\n".to_string(),
+                StyledInline::Text(block) => block.text.clone(),
+                StyledInline::HardBreak => "\n".to_string(),
             })
             .collect();
 
@@ -452,13 +476,13 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
 
 fn process_run(
     run: &LayoutRun,
-    segment_ranges: &Vec<SegmentRange>,
-    segments: &Vec<StyledSegment>,
+    segment_ranges: &Vec<StyledInlineRange>,
+    segments: &Vec<StyledInline>,
     prefix_len: usize,
     font_size: f32,
     run_byte_offset: usize,
-) -> Vec<TSpan> {
-    let mut tspans: Vec<TSpan> = vec![];
+) -> Vec<TspanDefinition> {
+    let mut tspans: Vec<TspanDefinition> = vec![];
 
     // * Handle prefixes
     // ? Since we inserted our prefix, it isn't going to be part of our StyledSegment.
@@ -472,7 +496,7 @@ fn process_run(
         }
 
         if !prefix_text.is_empty() {
-            tspans.push(TSpan {
+            tspans.push(TspanDefinition {
                 text: prefix_text,
                 font_size: font_size,
                 weight: Weight::NORMAL,
@@ -518,11 +542,11 @@ fn process_run(
             if prev_idx != segment_idx {
                 // Emit the accumulated text as a TSpan with styling from the previous segment.
                 let prev_segment = match &segments[prev_idx] {
-                    StyledSegment::Text(block) => block,
+                    StyledInline::Text(block) => block,
                     _ => unreachable!("Non-text segment shouldn't have a Range"),
                 };
 
-                tspans.push(TSpan {
+                tspans.push(TspanDefinition {
                     text: current_text.clone(),
                     font_size: font_size,
                     weight: prev_segment.weight,
@@ -543,10 +567,10 @@ fn process_run(
     if !current_text.is_empty() {
         if let Some(seg_idx) = current_segment_idx {
             let segment = match &segments[seg_idx] {
-                StyledSegment::Text(block) => block,
+                StyledInline::Text(block) => block,
                 _ => unreachable!("Non-text segment shouldn't have a Range"),
             };
-            tspans.push(TSpan {
+            tspans.push(TspanDefinition {
                 text: current_text.clone(),
                 font_size: font_size,
                 weight: segment.weight,
@@ -560,7 +584,7 @@ fn process_run(
 }
 
 /// Convert a `Tspan` into a raw SVG string  by a <text> tag.
-fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
+fn tspans_to_svg(tspans: &[TspanDefinition], x: f32, y: f32) -> String {
     let tspan_strings: Vec<String> = tspans
         .iter()
         .map(|ts| {
@@ -614,17 +638,17 @@ fn create_thematic_break(left: f32, right: f32, y: f32) -> String {
 }
 
 ///  Precompute the text range of our StyledBlock text as a byte range, which matches with the Cosmic Glyph start/end indices.
-fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
+fn build_styled_inline_ranges(segments: &Vec<StyledInline>) -> Vec<StyledInlineRange> {
     let mut ranges = Vec::new();
     let mut current_pos = 0;
 
     for (seg_idx, segment) in segments.iter().enumerate() {
         //println!("Current Pos: {}", current_pos);
         match segment {
-            StyledSegment::Text(block) => {
+            StyledInline::Text(block) => {
                 let seg_len = block.text.len();
 
-                ranges.push(SegmentRange {
+                ranges.push(StyledInlineRange {
                     segment_idx: seg_idx,
                     start_byte: current_pos,
                     end_byte: current_pos + seg_len,
@@ -633,7 +657,7 @@ fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
                 current_pos += seg_len;
             }
 
-            StyledSegment::HardBreak => {
+            StyledInline::HardBreak => {
                 // No style - advance cursor.
                 current_pos += 1;
             }
@@ -655,10 +679,10 @@ fn html_escape(text: &str) -> String {
 mod tests {
     use crate::{
         layout::{
-            LayoutResult, SvgConfig, TSpan, build_segment_ranges, styled_line_to_layout,
-            tspans_to_svg,
+            LayoutItem, SvgConfig, TspanDefinition, build_styled_inline_ranges,
+            styled_line_to_layout, tspans_to_svg,
         },
-        styles::{StyledLeafBlock, StyledLine, StyledSegment},
+        styles::{StyledBlock, StyledInline, StyledSpan},
     };
     use cosmic_text::{FamilyOwned, Style, Weight};
 
@@ -691,7 +715,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-weight="bold""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TSpan {
+        let tspan = TspanDefinition {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::BOLD,
@@ -714,7 +738,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-weight="bold""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TSpan {
+        let tspan = TspanDefinition {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -737,7 +761,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-style="italic""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TSpan {
+        let tspan = TspanDefinition {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -760,7 +784,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-style="italic""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TSpan {
+        let tspan = TspanDefinition {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -783,7 +807,7 @@ mod tests {
         let input_text = "Hello World".to_string();
 
         // Form a TSpan with some defaults
-        let tspan = TSpan {
+        let tspan = TspanDefinition {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -805,7 +829,7 @@ mod tests {
         let input_text = r#"<&>""#.to_string();
         let compare_text = "&lt;&amp;&gt;&quot;";
 
-        let tspan = TSpan {
+        let tspan = TspanDefinition {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -822,7 +846,7 @@ mod tests {
         // * Arrange
         let seg_text = "Hello World".to_string();
         // Create a vector of StyledSegments.
-        let segment = vec![StyledSegment::Text(StyledLeafBlock {
+        let segment = vec![StyledInline::Text(StyledSpan {
             text: seg_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -830,7 +854,7 @@ mod tests {
         })];
 
         // * Act
-        let segment_ranges = build_segment_ranges(&segment);
+        let segment_ranges = build_styled_inline_ranges(&segment);
 
         // * Assert
         assert_eq!(segment_ranges.len(), 1);
@@ -845,13 +869,13 @@ mod tests {
         let second_segment_text = "World".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::Text(StyledSpan {
                 text: first_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::Text(StyledSpan {
                 text: second_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -859,7 +883,7 @@ mod tests {
             }),
         ];
 
-        let segment_ranges = build_segment_ranges(&segments);
+        let segment_ranges = build_styled_inline_ranges(&segments);
 
         // * assert
         assert_eq!(segment_ranges.len(), 2);
@@ -874,14 +898,14 @@ mod tests {
         let second_segment_text = "World".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::Text(StyledSpan {
                 text: first_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
-            StyledSegment::HardBreak,
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::HardBreak,
+            StyledInline::Text(StyledSpan {
                 text: second_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -889,7 +913,7 @@ mod tests {
             }),
         ];
 
-        let segment_ranges = build_segment_ranges(&segments);
+        let segment_ranges = build_styled_inline_ranges(&segments);
 
         // * assert
         assert_eq!(segment_ranges.len(), 2); // Remains 2! Only count Text segments.
@@ -907,7 +931,7 @@ mod tests {
 
         let paragraph_text = "This is some paragraph text.".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledLeafBlock {
+        let segments = vec![StyledInline::Text(StyledSpan {
             text: paragraph_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -915,7 +939,7 @@ mod tests {
         })];
 
         // Create a basic StyledLine
-        let styled_line_para = StyledLine::Paragraph {
+        let styled_line_para = StyledBlock::Paragraph {
             segments: segments.clone(),
         };
 
@@ -924,8 +948,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Line(_)));
-        let LayoutResult::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Line(_)));
+        let LayoutItem::Line(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
         // Assert segments match the input StyledLine's segments
@@ -951,17 +975,17 @@ mod tests {
         let paragraph_text = "This is some paragraph text.".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::Text(StyledSpan {
                 text: paragraph_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
-            StyledSegment::HardBreak,
+            StyledInline::HardBreak,
         ];
 
         // Create a basic StyledLine
-        let styled_line_para = StyledLine::Paragraph {
+        let styled_line_para = StyledBlock::Paragraph {
             segments: segments.clone(),
         };
 
@@ -970,8 +994,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Line(_)));
-        let LayoutResult::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Line(_)));
+        let LayoutItem::Line(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
         // Assert segments match the input StyledLine's segments
@@ -996,7 +1020,7 @@ mod tests {
 
         let header_text = "# Header".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledLeafBlock {
+        let segments = vec![StyledInline::Text(StyledSpan {
             text: header_text.clone(),
             weight: Weight::BOLD,
             style: Style::Normal,
@@ -1004,7 +1028,7 @@ mod tests {
         })];
 
         // Create a basic StyledLine
-        let styled_line_para = StyledLine::Header {
+        let styled_line_para = StyledBlock::Header {
             segments: segments.clone(),
             level: 1,
         };
@@ -1014,8 +1038,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Line(_)));
-        let LayoutResult::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Line(_)));
+        let LayoutItem::Line(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1038,7 +1062,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledLeafBlock {
+        let segments = vec![StyledInline::Text(StyledSpan {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1046,7 +1070,7 @@ mod tests {
         })];
 
         // Create a basic StyledLine
-        let styled_line_para = StyledLine::BulletListItem {
+        let styled_line_para = StyledBlock::BulletListItem {
             segments: segments.clone(),
             indent: 0,
         };
@@ -1056,8 +1080,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Line(_)));
-        let LayoutResult::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Line(_)));
+        let LayoutItem::Line(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1077,7 +1101,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledLeafBlock {
+        let segments = vec![StyledInline::Text(StyledSpan {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1085,7 +1109,7 @@ mod tests {
         })];
 
         // Create a basic StyledLine
-        let styled_line_para = StyledLine::BulletListItem {
+        let styled_line_para = StyledBlock::BulletListItem {
             segments: segments.clone(),
             indent: 3,
         };
@@ -1095,8 +1119,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Line(_)));
-        let LayoutResult::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Line(_)));
+        let LayoutItem::Line(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1119,7 +1143,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledLeafBlock {
+        let segments = vec![StyledInline::Text(StyledSpan {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1129,7 +1153,7 @@ mod tests {
         let list_item_number = 6;
 
         // Create a basic StyledLine
-        let styled_line_para = StyledLine::NumberedListItem {
+        let styled_line_para = StyledBlock::NumberedListItem {
             segments: segments.clone(),
             number: list_item_number,
             indent: 0,
@@ -1140,8 +1164,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Line(_)));
-        let LayoutResult::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Line(_)));
+        let LayoutItem::Line(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1161,7 +1185,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledLeafBlock {
+        let segments = vec![StyledInline::Text(StyledSpan {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1169,7 +1193,7 @@ mod tests {
         })];
 
         // Create a basic StyledLine
-        let styled_line_para = StyledLine::NumberedListItem {
+        let styled_line_para = StyledBlock::NumberedListItem {
             segments: segments.clone(),
             number: 2,
             indent: 2,
@@ -1180,8 +1204,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Line(_)));
-        let LayoutResult::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Line(_)));
+        let LayoutItem::Line(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1203,15 +1227,15 @@ mod tests {
         let cfg = SvgConfig::default();
 
         // Create a blank StyledLine
-        let styled_line_para = StyledLine::Blank;
+        let styled_line_para = StyledBlock::Blank;
 
         // * Act
         let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutResult::Blank { height: _ }));
-        let LayoutResult::Blank { height } = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Blank { height: _ }));
+        let LayoutItem::Blank { height } = layout_result else {
             panic!("Expected LayoutResult::Blank");
         };
         assert_eq!(height, cfg.get_paragraph_spacing_factor());
