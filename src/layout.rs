@@ -21,6 +21,8 @@ pub struct LayoutLine {
 
 pub enum LayoutResult {
     Line(LayoutLine),
+    ThematicBreak,
+    // TODO - remove height var since it is derived from cfg anyway.
     Blank { height: f32 },
 }
 
@@ -28,6 +30,7 @@ impl LayoutResult {
     pub fn margin_top(&self) -> f32 {
         match self {
             LayoutResult::Line(lyt) => lyt.margin_top,
+            LayoutResult::ThematicBreak => 0.0, // Fixed space
             LayoutResult::Blank { .. } => 0.0, // Fixed space
         }
     }
@@ -35,6 +38,7 @@ impl LayoutResult {
     pub fn margin_bottom(&self) -> f32 {
         match self {
             LayoutResult::Line(lyt) => lyt.margin_bottom,
+            LayoutResult::ThematicBreak => 0.0, // Fixed space
             LayoutResult::Blank { .. } => 0.0, // Fixed space
         }
     }
@@ -77,7 +81,6 @@ pub fn styled_line_to_layout(
                 .flat_map(|seg| {
                     match seg {
                         StyledSegment::Text(block) => {
-                            //styled_blocks.push(block.clone());
                             vec![(
                                 block.text.as_str(),
                                 Attrs::new()
@@ -340,10 +343,19 @@ pub fn styled_line_to_layout(
                 margin_bottom: cfg.get_paragraph_spacing_factor(),
             })
         }
+
         StyledLine::Blank => LayoutResult::Blank {
             height: cfg.get_paragraph_spacing_factor(),
         },
-        _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
+
+        StyledLine::Blockquote { text } => todo!(),
+        StyledLine::Link { text, url, title } => todo!(),
+        StyledLine::Image {
+            description,
+            url,
+            title,
+        } => todo!(),
+        StyledLine::ThematicBreak => LayoutResult::ThematicBreak,
     }
 }
 
@@ -374,13 +386,20 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
 
                 cumulative_y_offset = updated_y + gap;
             }
-
+            LayoutResult::ThematicBreak => {
+                svg_lines.extend(vec!(create_thematic_break(cfg.canvas_opts.width, cumulative_y_offset)));
+                
+                cumulative_y_offset = cumulative_y_offset + cfg.get_paragraph_spacing_factor();
+                
+            }
+            // TODO - we don't need to take height here since it is defined in cfg.
             LayoutResult::Blank { height } => {
                 cumulative_y_offset = cumulative_y_offset + height;
             }
         }
         // Return final SVG collection.
     }
+    
     svg_lines
 }
 
@@ -543,6 +562,12 @@ fn process_run(
     tspans
 }
 
+/// Create a Horizontal Line/Thematic Break.
+fn create_thematic_break(width: f32, y: f32) -> String {
+    // define svg: </hr> at position
+    format!(r#"<line x1="0" y1="{y}" x2="{width}" y2="{y}" stroke="black" />"#)
+}
+
 /// Convert a `Tspan` into a raw SVG string  by a <text> tag.
 fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
     let tspan_strings: Vec<String> = tspans
@@ -636,7 +661,7 @@ mod tests {
             LayoutResult, SvgConfig, TSpan, build_segment_ranges, styled_line_to_layout,
             tspans_to_svg,
         },
-        styles::{StyledBlock, StyledLine, StyledSegment},
+        styles::{StyledLeafBlock, StyledLine, StyledSegment},
     };
     use cosmic_text::{FamilyOwned, Style, Weight};
 
@@ -800,7 +825,7 @@ mod tests {
         // * Arrange
         let seg_text = "Hello World".to_string();
         // Create a vector of StyledSegments.
-        let segment = vec![StyledSegment::Text(StyledBlock {
+        let segment = vec![StyledSegment::Text(StyledLeafBlock {
             text: seg_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -823,13 +848,13 @@ mod tests {
         let second_segment_text = "World".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: first_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: second_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -852,14 +877,14 @@ mod tests {
         let second_segment_text = "World".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: first_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
             StyledSegment::HardBreak,
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: second_segment_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -885,7 +910,7 @@ mod tests {
 
         let paragraph_text = "This is some paragraph text.".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: paragraph_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -929,7 +954,7 @@ mod tests {
         let paragraph_text = "This is some paragraph text.".to_string();
 
         let segments = vec![
-            StyledSegment::Text(StyledBlock {
+            StyledSegment::Text(StyledLeafBlock {
                 text: paragraph_text.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -974,7 +999,7 @@ mod tests {
 
         let header_text = "# Header".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::BOLD,
             style: Style::Normal,
@@ -1016,7 +1041,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1058,7 +1083,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1149,7 +1174,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -1194,7 +1219,7 @@ mod tests {
 
         let header_text = "- Bullet Item".to_string();
 
-        let segments = vec![StyledSegment::Text(StyledBlock {
+        let segments = vec![StyledSegment::Text(StyledLeafBlock {
             text: header_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
