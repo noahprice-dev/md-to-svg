@@ -1,7 +1,7 @@
 use cosmic_text::{FamilyOwned, Style, Weight};
 use md_to_svg::layout::{ process_layouts, styled_line_to_layout};
 use md_to_svg::config::SvgConfig;
-use md_to_svg::styles::{StyledLeafBlock, StyledLine, StyledSegment};
+use md_to_svg::styles::{StyledSpan, StyledBlock, StyledInline};
 
 use crate::common::{create_default_test_font_system, normalize_svg_for_comparison};
 
@@ -14,8 +14,8 @@ fn process_layout_line_paragraph() {
 
     let paragraph_text = "Hello World".to_string();
 
-    let styled_line = StyledLine::Paragraph {
-        segments: vec![StyledSegment::Text(StyledLeafBlock {
+    let styled_line = StyledBlock::Paragraph {
+        segments: vec![StyledInline::Text(StyledSpan {
             text: paragraph_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -38,8 +38,8 @@ fn process_layout_line_long_soft_wrap_produces_multiple_lines() {
 
     let paragraph_text = "'In the stillest moment of your night, if it were truly denied you to create, would you die?' And if your answer is yes, you have no choice. That is your choice, because there is no euphoria in a different place for an artist.".to_string();
 
-    let styled_line = StyledLine::Paragraph {
-        segments: vec![StyledSegment::Text(StyledLeafBlock {
+    let styled_line = StyledBlock::Paragraph {
+        segments: vec![StyledInline::Text(StyledSpan {
             text: paragraph_text.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -59,16 +59,16 @@ fn process_layout_line_long_hard_break_produces_multiple_lines() {
     let mut font_system = create_default_test_font_system();
     let cfg = SvgConfig::default();
 
-    let styled_line = StyledLine::Paragraph {
+    let styled_line = StyledBlock::Paragraph {
         segments: vec![
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::Text(StyledSpan {
                 text: "Slip like Freudian".to_string(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
-            StyledSegment::HardBreak,
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::HardBreak,
+            StyledInline::Text(StyledSpan {
                 text: "Your first and last step to playing yourself like accordion".to_string(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -91,8 +91,8 @@ fn process_layouts_soft_wrap_preserves_text_content() {
 
     let expected = r#"This is some long text that will wrap, but also includes some special characters such as "Quotes", < > & '"#.to_string();
 
-    let styled_line = StyledLine::Paragraph {
-        segments: vec![StyledSegment::Text(StyledLeafBlock {
+    let styled_line = StyledBlock::Paragraph {
+        segments: vec![StyledInline::Text(StyledSpan {
             text: expected.clone(),
             weight: Weight::NORMAL,
             style: Style::Normal,
@@ -127,16 +127,16 @@ fn process_layouts_hard_break_preserves_text_content() {
     ]
     .join(" ");
 
-    let styled_line = StyledLine::Paragraph {
+    let styled_line = StyledBlock::Paragraph {
         segments: vec![
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::Text(StyledSpan {
                 text: paragraph_text_upper.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             }),
-            StyledSegment::HardBreak,
-            StyledSegment::Text(StyledLeafBlock {
+            StyledInline::HardBreak,
+            StyledInline::Text(StyledSpan {
                 text: paragraph_text_lower.clone(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,

@@ -27,11 +27,11 @@ pub struct SvgConfig {
 
 impl SvgConfig {
     /// Space between lines inside of a paragraph.
-    pub const fn get_line_spacing_factor(&self) -> f32 {
+    pub const fn calculate_line_height_px(&self) -> f32 {
         self.text_opts.font_size * self.text_opts.line_height_factor
     }
     /// Space between discrete paragraphs or blocks of text.
-    pub const fn get_paragraph_spacing_factor(&self) -> f32 {
+    pub const fn calculate_paragraph_spacing_px(&self) -> f32 {
         self.text_opts.font_size * self.text_opts.paragraph_spacing_factor
     }
 }

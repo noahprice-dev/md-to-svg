@@ -10,6 +10,7 @@ use crate::{
 
 // This should use a From impl that takes in a StyledSpan and adjusts accordingly?
 /// A range of text with a specific style associated with `cosmic_text` style types.
+#[derive(Debug, Clone)]
 pub enum LayoutInline {
     Text {
         text: String,
@@ -29,7 +30,7 @@ pub enum LayoutInline {
 #[derive(Debug)]
 pub struct LayoutBlock {
     pub buffer: Buffer,
-    pub segments: Vec<StyledInline>,
+    pub segments: Vec<LayoutInline>,
     pub font_size: f32,
     pub prefix_len: usize,
     pub indent_offset: f32,
@@ -88,7 +89,10 @@ pub fn styled_line_to_layout(
     cfg: &SvgConfig,
 ) -> LayoutItem {
     // * Arrange our default available width based on the overall SVG size minus any L/R padding.
-
+    // TODO - InlineLinkRange: Mapping nested InlineStyle between a shaped buffeer text and the link definition is required.
+    // ? This could occur during the InlineStyleRange generation potentially?
+    // ? This also overlaps with the LinkDefinition type at the Parsing statge.
+    // ? This struct would be created during the Parsing stage and consumed during the Layout stage.
     match line {
         StyledBlock::Paragraph { segments } => {
             let available_width = cfg.canvas_opts.width
@@ -96,14 +100,14 @@ pub fn styled_line_to_layout(
 
             let mut buffer = Buffer::new(
                 font_system,
-                Metrics::new(cfg.text_opts.font_size, cfg.get_line_spacing_factor()),
+                Metrics::new(cfg.text_opts.font_size, cfg.calculate_line_height_px()),
             );
 
             let styled_segments: Vec<(&str, Attrs)> = segments
                 .iter()
                 .flat_map(|seg| {
                     match seg {
-                        StyledInline::Text(block) => {
+                        LayoutInline::Text(block) => {
                             vec![(
                                 block.text.as_str(),
                                 Attrs::new()
@@ -121,16 +125,16 @@ pub fn styled_line_to_layout(
                 })
                 .collect();
 
-            let _full_text: String = styled_segments.iter().map(|(text, _)| *text).collect();
+            //let _full_text: String = styled_segments.iter().map(|(text, _)| *text).collect();
 
-            let rich_text: Vec<(&str, Attrs)> = styled_segments
-                .iter()
-                .map(|(text, attrs)| (*text, attrs.clone()))
-                .collect();
+            // let rich_text: Vec<(&str, Attrs)> = styled_segments
+            //     .iter()
+            //     .map(|(text, attrs)| (*text, attrs.clone()))
+            //     .collect();
 
             buffer.set_rich_text(
                 font_system,
-                rich_text,
+                styled_segments,
                 &Attrs::new().family(Family::SansSerif),
                 cosmic_text::Shaping::Advanced,
                 None,
@@ -143,8 +147,8 @@ pub fn styled_line_to_layout(
                 font_size: cfg.text_opts.font_size,
                 prefix_len: 0,
                 indent_offset: 0.0,
-                margin_top: cfg.get_paragraph_spacing_factor(),
-                margin_bottom: cfg.get_paragraph_spacing_factor(),
+                margin_top: cfg.calculate_paragraph_spacing_px(),
+                margin_bottom: cfg.calculate_paragraph_spacing_px(),
             })
         }
 
@@ -365,16 +369,17 @@ pub fn styled_line_to_layout(
         },
 
         StyledBlock::Blockquote { text } => todo!(),
-        StyledBlock::Link { text, url, title } => todo!(),
-        StyledBlock::Image {
-            description,
-            url,
-            title,
-        } => todo!(),
+        // StyledBlock::Link { text, url, title } => todo!(),
+        // StyledBlock::Image {
+        //     description,
+        //     url,
+        //     title,
+        // } => todo!(),
         StyledBlock::ThematicBreak => LayoutItem::ThematicBreak {
             left: cfg.canvas_opts.padding.left,
             right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,
         },
+        _ => todo!()
     }
 }
 
@@ -412,7 +417,7 @@ pub fn process_layouts(layouts: Vec<LayoutItem>, cfg: &SvgConfig) -> Vec<String>
                     cumulative_y_offset,
                 )]);
 
-                cumulative_y_offset = cumulative_y_offset + cfg.get_paragraph_spacing_factor();
+                cumulative_y_offset = cumulative_y_offset + cfg.calculate_paragraph_spacing_px();
             }
             LayoutItem::Blank { height } => {
                 cumulative_y_offset = cumulative_y_offset + height;
@@ -426,7 +431,7 @@ pub fn process_layouts(layouts: Vec<LayoutItem>, cfg: &SvgConfig) -> Vec<String>
 
 fn process_layout_line(layout: &LayoutBlock, y_cursor: f32, cfg: &SvgConfig) -> (Vec<String>, f32) {
     let mut svg_elements: Vec<String> = Vec::new();
-    let mut cumulative_y = y_cursor;
+    let mut cumulative_y = y_cursor; //the baseline 'leading' (led-ing), if ya nasty
 
     // * Build our Segment Map for this LayoutLine.
     let segment_ranges = build_styled_inline_ranges(&layout.segments);
@@ -707,6 +712,7 @@ mod tests {
         let font_sys = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
         font_sys
     }
+    
     // * --- tspan_to_svg ---
     #[test]
     fn tspans_to_svg_preserves_bold_weight_includes_attribute() {
@@ -957,9 +963,9 @@ mod tests {
         // Assert font_size matches cfg.text_opts.font_size
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_top, cfg.calculate_paragraph_spacing_px());
         // Assert margin_bottom matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.calculate_paragraph_spacing_px());
         // Assert prefix_len is 0 (paragraphs have no prefix)
         assert_eq!(line.prefix_len, 0);
         // Assert indent_offset is 0.0 (paragraphs have no indent)
@@ -1003,9 +1009,9 @@ mod tests {
         // Assert font_size matches cfg.text_opts.font_size
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         // Assert margin_top matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_top, cfg.calculate_paragraph_spacing_px());
         // Assert margin_bottom matches cfg.paragraph_spacing()
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_bottom, cfg.calculate_paragraph_spacing_px());
         // Assert prefix_len is 0 (paragraphs have no prefix)
         assert_eq!(line.prefix_len, 0);
         // Assert indent_offset is 0.0 (paragraphs have no indent)
@@ -1089,8 +1095,8 @@ mod tests {
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
         assert_eq!(line.indent_offset, 0.0);
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_top, cfg.calculate_paragraph_spacing_px());
+        assert_eq!(line.margin_bottom, cfg.calculate_paragraph_spacing_px());
     }
 
     #[test]
@@ -1131,8 +1137,8 @@ mod tests {
             line.indent_offset,
             3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_top, cfg.calculate_paragraph_spacing_px());
+        assert_eq!(line.margin_bottom, cfg.calculate_paragraph_spacing_px());
     }
 
     #[test]
@@ -1173,8 +1179,8 @@ mod tests {
         assert_eq!(line.font_size, cfg.text_opts.font_size);
         assert_eq!(line.prefix_len, 3); // * prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
         assert_eq!(line.indent_offset, 0.0);
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_top, cfg.calculate_paragraph_spacing_px());
+        assert_eq!(line.margin_bottom, cfg.calculate_paragraph_spacing_px());
     }
 
     #[test]
@@ -1216,8 +1222,8 @@ mod tests {
             line.indent_offset,
             2.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
         );
-        assert_eq!(line.margin_top, cfg.get_paragraph_spacing_factor());
-        assert_eq!(line.margin_bottom, cfg.get_paragraph_spacing_factor());
+        assert_eq!(line.margin_top, cfg.calculate_paragraph_spacing_px());
+        assert_eq!(line.margin_bottom, cfg.calculate_paragraph_spacing_px());
     }
 
     #[test]
@@ -1238,6 +1244,6 @@ mod tests {
         let LayoutItem::Blank { height } = layout_result else {
             panic!("Expected LayoutResult::Blank");
         };
-        assert_eq!(height, cfg.get_paragraph_spacing_factor());
+        assert_eq!(height, cfg.calculate_paragraph_spacing_px());
     }
 }

@@ -6,7 +6,7 @@ use cosmic_text::FontSystem;
 use markdown::ParseOptions;
 
 use crate::{
-    MdToSvgError, config::SvgConfig, layout::{LayoutItem, process_layouts, styled_line_to_layout}, parser::parse_blocks
+    MdToSvgError, config::SvgConfig, layout::{LayoutItem, process_layouts, styled_line_to_layout}, parser::node_to_styled_block
 };
 
 pub fn process_md_to_svg(
@@ -35,7 +35,7 @@ pub fn process_md_to_svg(
     // * It should only fail if JSX/MDX is enabled, AND that parsing fails.
     let root = markdown::to_mdast(&md_text, &ParseOptions::default())?;
 
-    let styled_lines  = parse_blocks(&root, 0);
+    let styled_lines: Vec<crate::styles::StyledBlock>  = node_to_styled_block(&root, 0);
     
     //println!("Styled Lines: {:#?}", styled_lines);
     let layout_lines = styled_lines

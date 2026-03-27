@@ -1,31 +1,18 @@
-use cosmic_text::{FamilyOwned, Style, Weight};
+use cosmic_text::{Attrs, Buffer, FamilyOwned, FontSystem, Metrics, Style, Weight};
 
-use crate::layout::LayoutInline;
+use crate::{
+    config::SvgConfig,
+    layout::{LayoutBlock, LayoutInline},
+};
 
-#[derive(Debug, Clone, PartialEq)]
 // TODO (1.1) - Support for strikethrough, sub/superscript.
+// TODO (1.1) Make family configurable. (Elsewhere...)
 /// ? Family defaults to SansSerif
-// TODO (1.1) Make family configurable.
-// TODO use bool style flags.
-
-/// A span of text with a consistent text-style.
-pub struct StyledSpan {
-    pub text: String,
-    pub weight: bool,
-    pub style: bool,
-    pub family: bool,
-}
-
-impl StyledSpan {
-    // TODO remove and replace with `layout` level Transform step.
-}
-
 /// Defines a text container that may optionally
 /// contain further differently styled text or non-text structural definitions.
-// TODO rename to StyledInline (STRUCTURE PRESERVING, PRODUCED BY PARSER)
 #[derive(Clone, Debug, PartialEq)]
 pub enum StyledInline {
-    Text(StyledSpan),
+    Text(String),
     Emphasis(Vec<StyledInline>),
     Strong(Vec<StyledInline>),
     Link {
@@ -61,7 +48,7 @@ impl StyledInline {
                 // Final/Leaf case
                 // Convert StyleContext into real `cosmic` types
                 vec![LayoutInline::Text {
-                    text: span.text,
+                    text: span,
                     weight: if ctx.bold {
                         Weight::BOLD
                     } else {
@@ -119,7 +106,6 @@ impl StyledInline {
 /// Block level definitions.
 /// Provides styling directives for specific line level containers (Lists, Blockquote)
 /// As well as Block leaves such as Paragraph or Headers and non-text structural elements such as Thematic Break (Horizontal Rule)
-///
 #[derive(Clone, Debug)]
 pub enum StyledBlock {
     Header {
@@ -141,23 +127,159 @@ pub enum StyledBlock {
     Blockquote {
         text: String,
     },
-    Link {
-        // ? Can be formatted text.
-        text: Vec<StyledSpan>,
-        url: String,
-        title: Option<String>,
-    },
-    Image {
-        // ? Cannot be formatted text.
-        description: Option<String>,
-        url: String,
-        title: Option<String>,
-    },
+    // ? Are these valid BlockTypes?
+    // Link {
+    //     // ? Can be formatted text.
+    //     text: Vec<StyledInline>,
+    //     url: String,
+    //     title: Option<String>,
+    // },
+    // Image {
+    //     // ? Cannot be formatted text.
+    //     description: Option<String>,
+    //     url: String,
+    //     title: Option<String>,
+    // },
     ThematicBreak,
-    Blank,
 }
 
 impl StyledBlock {
+    // TODO - investigate use of clones for LayoutInlines, prefixes - can we avoid this?
+    pub fn into_layout_block(self, cfg: &SvgConfig, font_system: &mut FontSystem) -> LayoutBlock {
+        match self {
+            StyledBlock::Paragraph { segments } => {
+                let available_width = cfg.canvas_opts.width
+                    - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
+
+                let layout_lines: Vec<LayoutInline> = segments
+                    .into_iter()
+                    .flat_map(|line| line.into_layout_inline())
+                    .collect();
+
+                let buffer = create_buffer(
+                    &layout_lines,
+                    cfg.text_opts.font_size,
+                    cfg.calculate_line_height_px(),
+                    available_width,
+                    font_system,
+                    None,
+                );
+                LayoutBlock {
+                    buffer,
+                    segments: layout_lines,
+                    font_size: cfg.text_opts.font_size,
+                    prefix_len: 0,
+                    indent_offset: 0.0,
+                    margin_top: cfg.calculate_paragraph_spacing_px(),
+                    margin_bottom: cfg.calculate_paragraph_spacing_px(),
+                }
+            }
+            StyledBlock::Header { segments, level } => {
+                let scaled_font_size =
+                    cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(level);
+
+                let available_width = cfg.canvas_opts.width
+                    - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
+
+                let layout_lines: Vec<LayoutInline> = segments
+                    .into_iter()
+                    .flat_map(|line| line.into_layout_inline())
+                    .collect();
+
+                let buffer = create_buffer(
+                    &layout_lines,
+                    scaled_font_size,
+                    scaled_font_size * cfg.text_opts.line_height_factor,
+                    available_width,
+                    font_system,
+                    None,
+                );
+                LayoutBlock {
+                    buffer,
+                    segments: layout_lines,
+                    font_size: cfg.text_opts.font_size,
+                    prefix_len: 0,
+                    indent_offset: 0.0,
+                    margin_top: cfg.calculate_paragraph_spacing_px(),
+                    margin_bottom: cfg.calculate_paragraph_spacing_px(),
+                }
+            }
+            StyledBlock::BulletListItem { segments, indent } => {
+                let indent_size =
+                    indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+ 
+                // * Update our available_width based on the indent and padding.
+                let available_width = cfg.canvas_opts.width
+                    - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
+                    - indent_size;
+
+                let prefix = format!("{} ", cfg.text_opts.bullet_char);
+
+                let layout_lines: Vec<LayoutInline> = segments
+                    .into_iter()
+                    .flat_map(|line| line.into_layout_inline())
+                    .collect();
+
+                let buffer = create_buffer(
+                    &layout_lines,
+                    cfg.text_opts.font_size,
+                    cfg.calculate_line_height_px(),
+                    available_width,
+                    font_system,
+                    Some(&prefix),
+                );
+                LayoutBlock {
+                    buffer,
+                    segments: layout_lines,
+                    font_size: cfg.text_opts.font_size,
+                    prefix_len: prefix.len(),
+                    indent_offset: indent_size,
+                    margin_top: cfg.calculate_paragraph_spacing_px(),
+                    margin_bottom: cfg.calculate_paragraph_spacing_px(),
+                }
+            }
+            StyledBlock::NumberedListItem {
+                segments,
+                number,
+                indent,
+            } => {
+                let indent_size =
+                    indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+                    
+                let available_width = cfg.canvas_opts.width
+                    - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
+                    - indent_size;
+                let prefix = format!("{}. ", number);
+
+                let layout_lines: Vec<LayoutInline> = segments
+                    .into_iter()
+                    .flat_map(|line| line.into_layout_inline())
+                    .collect();
+
+                let buffer = create_buffer(
+                    &layout_lines,
+                    cfg.text_opts.font_size,
+                    cfg.calculate_line_height_px(),
+                    available_width,
+                    font_system,
+                    Some(&prefix),
+                );
+                LayoutBlock {
+                    buffer,
+                    segments: layout_lines,
+                    font_size: cfg.text_opts.font_size,
+                    prefix_len: prefix.len(),
+                    indent_offset: indent_size,
+                    margin_top: cfg.calculate_paragraph_spacing_px(),
+                    margin_bottom: cfg.calculate_paragraph_spacing_px(),
+                }
+            }
+            StyledBlock::ThematicBreak => todo!(),
+            _ => todo!(),
+        }
+    }
+
+    // TODO remove? This is just used for debugging andd printing in-progress types..
     pub fn get_type(&self) -> String {
         match self {
             StyledBlock::Header { .. } => String::from("Header"),
@@ -165,10 +287,9 @@ impl StyledBlock {
             StyledBlock::NumberedListItem { .. } => String::from("Numbered List Item"),
             StyledBlock::Paragraph { .. } => String::from("Paragraph"),
             StyledBlock::Blockquote { .. } => String::from("Blockquote"),
-            StyledBlock::Link { .. } => String::from("Link"),
-            StyledBlock::Image { .. } => String::from("Image"),
+            // StyledBlock::Link { .. } => String::from("Link"),
+            // StyledBlock::Image { .. } => String::from("Image"),
             StyledBlock::ThematicBreak => String::from("Horizontal Rule"),
-            StyledBlock::Blank => String::from("Blank"),
         }
     }
 }
@@ -178,7 +299,7 @@ impl StyledBlock {
 // ? it seems that these items are supported in GFM (Github Flavored Markdown) - for now, I would like to handle pure Markdown.
 // todo make private
 #[derive(Clone, Copy, Debug)]
-pub struct StyleContext {
+struct StyleContext {
     pub bold: bool,
     pub italic: bool,
     pub monospace: bool,
@@ -192,4 +313,61 @@ impl StyleContext {
             monospace: false,
         }
     }
+}
+
+fn create_buffer(
+    inlines: &[LayoutInline],
+    font_size: f32,
+    line_height: f32,
+    width: f32,
+    font_system: &mut FontSystem,
+    prefix: Option<&str>,
+) -> cosmic_text::Buffer {
+    let mut buffer = Buffer::new(font_system, Metrics::new(font_size, line_height));
+
+    //  * Define an interator instruction for the optional prefix
+    let prefix_spans: Option<(&str, Attrs<'_>)> = prefix.as_deref().map(|p| (p, Attrs::new()));
+
+    // * Define an iterator instruction for our content strings
+    let layout_spans = inlines.iter().flat_map(|inline| match inline {
+        LayoutInline::Text {
+            text,
+            weight,
+            style,
+            family,
+        } => {
+            vec![(
+                text.as_str(),
+                Attrs::new()
+                    .weight(*weight)
+                    .style(*style)
+                    .family(family.as_family()),
+            )]
+        }
+        // * We have previously removed soft-breaks from the Markdown document, since these are not implicit
+        // * We need to inform Cosmic on where to insert real HardBreaks from the original doc.
+        LayoutInline::HardBreak => {
+            vec![("\n", Attrs::new())]
+        }
+        // TODO
+        LayoutInline::InlineLink {
+            link_text,
+            url,
+            title,
+        } => todo!(),
+    });
+
+    // * Join both iterators. We only add the prefix spans if we have Some((&str, Attrs))
+    let all_spans: Vec<(&str, Attrs<'_>)> = prefix_spans.into_iter().chain(layout_spans).collect();
+
+    buffer.set_rich_text(
+        font_system,
+        all_spans,
+        &Attrs::new(),
+        cosmic_text::Shaping::Advanced,
+        None,
+    );
+    buffer.set_size(font_system, Some(width), Some(f32::MAX));
+
+    buffer
 }
