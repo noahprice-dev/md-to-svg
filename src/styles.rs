@@ -144,7 +144,6 @@ pub enum StyledBlock {
 }
 
 impl StyledBlock {
-    // TODO - investigate use of clones for LayoutInlines, prefixes - can we avoid this?
     pub fn into_layout_block(self, cfg: &SvgConfig, font_system: &mut FontSystem) -> LayoutBlock {
         match self {
             StyledBlock::Paragraph { segments } => {

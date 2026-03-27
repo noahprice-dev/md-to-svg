@@ -41,7 +41,7 @@ pub struct LayoutBlock {
 /// A discrete unit of work for the layout engine.
 /// This may be a LayoutBlock or a non-text structural element.
 pub enum LayoutItem {
-    Line(LayoutBlock),
+    Block(LayoutBlock),
     ThematicBreak { left: f32, right: f32 }, //? Support for creative thematic breaks?
     Blank { height: f32 },
 }
@@ -49,7 +49,7 @@ pub enum LayoutItem {
 impl LayoutItem {
     pub fn margin_top(&self) -> f32 {
         match self {
-            LayoutItem::Line(lyt) => lyt.margin_top,
+            LayoutItem::Block(lyt) => lyt.margin_top,
             LayoutItem::ThematicBreak { .. } => 0.0, // Fixed space
             LayoutItem::Blank { .. } => 0.0,         // Fixed space
         }
@@ -57,7 +57,7 @@ impl LayoutItem {
 
     pub fn margin_bottom(&self) -> f32 {
         match self {
-            LayoutItem::Line(lyt) => lyt.margin_bottom,
+            LayoutItem::Block(lyt) => lyt.margin_bottom,
             LayoutItem::ThematicBreak { .. } => 0.0, // Fixed space
             LayoutItem::Blank { .. } => 0.0,         // Fixed space
         }
@@ -83,306 +83,6 @@ pub struct TspanDefinition {
     family: FamilyOwned,
 }
 
-pub fn styled_line_to_layout(
-    line: StyledBlock,
-    font_system: &mut FontSystem,
-    cfg: &SvgConfig,
-) -> LayoutItem {
-    // * Arrange our default available width based on the overall SVG size minus any L/R padding.
-    // TODO - InlineLinkRange: Mapping nested InlineStyle between a shaped buffeer text and the link definition is required.
-    // ? This could occur during the InlineStyleRange generation potentially?
-    // ? This also overlaps with the LinkDefinition type at the Parsing statge.
-    // ? This struct would be created during the Parsing stage and consumed during the Layout stage.
-    match line {
-        StyledBlock::Paragraph { segments } => {
-            let available_width = cfg.canvas_opts.width
-                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
-
-            let mut buffer = Buffer::new(
-                font_system,
-                Metrics::new(cfg.text_opts.font_size, cfg.calculate_line_height_px()),
-            );
-
-            let styled_segments: Vec<(&str, Attrs)> = segments
-                .iter()
-                .flat_map(|seg| {
-                    match seg {
-                        LayoutInline::Text(block) => {
-                            vec![(
-                                block.text.as_str(),
-                                Attrs::new()
-                                    .weight(block.weight)
-                                    .style(block.style)
-                                    .family(block.family.as_family()),
-                            )]
-                        }
-                        StyledInline::HardBreak => {
-                            // * Since we are updating how we are drawing in Cosmic,
-                            // * we also need to reflect that in how we draw with SVG by inserting the same lines.
-                            vec![("\n", Attrs::new())]
-                        }
-                    }
-                })
-                .collect();
-
-            //let _full_text: String = styled_segments.iter().map(|(text, _)| *text).collect();
-
-            // let rich_text: Vec<(&str, Attrs)> = styled_segments
-            //     .iter()
-            //     .map(|(text, attrs)| (*text, attrs.clone()))
-            //     .collect();
-
-            buffer.set_rich_text(
-                font_system,
-                styled_segments,
-                &Attrs::new().family(Family::SansSerif),
-                cosmic_text::Shaping::Advanced,
-                None,
-            );
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
-
-            LayoutItem::Line(LayoutBlock {
-                buffer,
-                segments: segments.clone(),
-                font_size: cfg.text_opts.font_size,
-                prefix_len: 0,
-                indent_offset: 0.0,
-                margin_top: cfg.calculate_paragraph_spacing_px(),
-                margin_bottom: cfg.calculate_paragraph_spacing_px(),
-            })
-        }
-
-        StyledBlock::Header { segments, level } => {
-            // ? Depending on the Header level, we will scale our font-size.
-            let scaled_font_size =
-                cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(level);
-
-            let available_width = cfg.canvas_opts.width
-                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
-
-            // * Define the size of a the Line Box for this line.
-            let mut buffer = Buffer::new(
-                font_system,
-                Metrics::new(
-                    scaled_font_size,
-                    scaled_font_size * cfg.text_opts.line_height_factor,
-                ),
-            );
-
-            let styled_segments: Vec<(&str, Attrs)> = segments
-                .iter()
-                .flat_map(|block| match block {
-                    StyledInline::Text(block) => {
-                        vec![(
-                            block.text.as_str(),
-                            Attrs::new().weight(block.weight).style(block.style),
-                        )]
-                    }
-                    StyledInline::HardBreak => {
-                        vec![("\n", Attrs::new())]
-                    }
-                })
-                .collect();
-
-            let rich_text: Vec<(&str, Attrs)> = styled_segments
-                .iter()
-                .map(|(text, attrs)| (*text, attrs.clone()))
-                .collect();
-
-            buffer.set_rich_text(
-                font_system,
-                rich_text,
-                &Attrs::new().family(Family::SansSerif),
-                cosmic_text::Shaping::Advanced,
-                None,
-            );
-
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
-
-            LayoutItem::Line(LayoutBlock {
-                buffer,
-                segments: segments.clone(),
-                font_size: scaled_font_size,
-                prefix_len: 0,
-                indent_offset: 0.0,
-                margin_top: cfg.header_opts.header_margin_top,
-                margin_bottom: cfg.header_opts.header_margin_bot,
-            })
-        }
-
-        StyledBlock::BulletListItem { segments, indent } => {
-            // * Define the size of a the Line Box for this line.
-            let mut buffer = Buffer::new(
-                font_system,
-                Metrics::new(cfg.text_opts.font_size, cfg.get_line_spacing_factor()),
-            );
-
-            // * Calculate our indent by taking the number of indents and multiplying it by a unit size
-            // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size =
-                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
-
-            // * Update our available_width based on the indent and padding.
-            let available_width = cfg.canvas_opts.width
-                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
-                - indent_size;
-
-            let prefix = format!("{} ", cfg.text_opts.bullet_char);
-
-            let styled_segments: Vec<(String, Attrs)> = segments
-                .iter()
-                .enumerate()
-                .flat_map(|(i, block)| {
-                    match block {
-                        StyledInline::Text(block) => {
-                            let text = if i == 0 {
-                                // We need to insert the bullet character here, however we can't simply use format!().as_str
-                                // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
-                                // Therefore, we need to have `styled_segments` own the full String and later have `buffer` borrow it for it's final form.
-                                format!("{}{}", &prefix, &block.text)
-                            } else {
-                                block.text.clone()
-                            };
-
-                            let attrs = Attrs::new().weight(block.weight).style(block.style);
-
-                            vec![(text, attrs)]
-                        }
-                        StyledInline::HardBreak => {
-                            let text = "\n".to_string();
-                            let attrs = Attrs::new();
-                            vec![(text, attrs)]
-                        }
-                    }
-                })
-                .collect();
-
-            // Convert our segments back into &str, Attrs to satisfy Cosmic API
-            let rich_text: Vec<(&str, Attrs)> = styled_segments
-                .iter()
-                .map(|(text, attrs)| (text.as_str(), attrs.clone()))
-                .collect();
-
-            buffer.set_rich_text(
-                font_system,
-                rich_text,
-                &Attrs::new().family(Family::SansSerif),
-                cosmic_text::Shaping::Advanced,
-                None,
-            );
-
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
-
-            LayoutItem::Line(LayoutBlock {
-                buffer,
-                segments: segments.clone(),
-                font_size: cfg.text_opts.font_size,
-                prefix_len: prefix.len(),
-                indent_offset: indent_size,
-                margin_top: cfg.get_paragraph_spacing_factor(),
-                margin_bottom: cfg.get_paragraph_spacing_factor(),
-            })
-        }
-
-        StyledBlock::NumberedListItem {
-            segments,
-            number,
-            indent,
-        } => {
-            // * Define the size of a the Line Box for this line.
-            let mut buffer = Buffer::new(
-                font_system,
-                Metrics::new(cfg.text_opts.font_size, cfg.get_line_spacing_factor()),
-            );
-
-            // * Calculate our indent by taking the number of indents and multiplying it by a unit size
-            // * Our Unit Size is based on the font_size multiplied by an em value, default 1.5.
-            let indent_size =
-                indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
-
-            // * Update our available_width based on the indent and prefix-length
-            let available_width = cfg.canvas_opts.width
-                - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
-                - indent_size;
-
-            let prefix = format!("{}. ", number);
-
-            let styled_segments: Vec<(String, Attrs)> = segments
-                .iter()
-                .enumerate()
-                .flat_map(|(i, block)| {
-                    match block {
-                        StyledInline::Text(block) => {
-                            let text = if i == 0 {
-                                // We need to insert the bullet character here, however we can't simply use format!().as_str
-                                // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
-                                // Therefore, we need to have `styled_segments` own the full String and later have `buffer` borrow it for it's final form.
-                                format!("{}{}", &prefix, &block.text)
-                            } else {
-                                block.text.clone()
-                            };
-
-                            let attrs = Attrs::new().weight(block.weight).style(block.style);
-
-                            vec![(text, attrs)]
-                        }
-                        StyledInline::HardBreak => {
-                            let text = "\n".to_string();
-                            let attrs = Attrs::new();
-                            vec![(text, attrs)]
-                        }
-                    }
-                })
-                .collect();
-
-            // * Cosmic Text expects a vector of 'spans' which are a collection of Strings and the attributes for that String.
-            let rich_text: Vec<(&str, Attrs)> = styled_segments
-                .iter()
-                .map(|(text, attrs)| ((text.as_str()), attrs.clone()))
-                .collect();
-
-            buffer.set_rich_text(
-                font_system,
-                rich_text,
-                &Attrs::new().family(Family::SansSerif),
-                cosmic_text::Shaping::Advanced,
-                None,
-            );
-
-            // * Our buffer size is limited by Width as we want accurate word-wrapping to the canvas size.
-            // * Our height is unbounded because we are not testing for vertical space, as each line is run on a different Buffer.
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
-
-            LayoutItem::Line(LayoutBlock {
-                buffer,
-                segments: segments.clone(),
-                font_size: cfg.text_opts.font_size,
-                prefix_len: prefix.len(),
-                indent_offset: indent_size,
-                margin_top: cfg.get_paragraph_spacing_factor(),
-                margin_bottom: cfg.get_paragraph_spacing_factor(),
-            })
-        }
-
-        StyledBlock::Blank => LayoutItem::Blank {
-            height: cfg.get_paragraph_spacing_factor(),
-        },
-
-        StyledBlock::Blockquote { text } => todo!(),
-        // StyledBlock::Link { text, url, title } => todo!(),
-        // StyledBlock::Image {
-        //     description,
-        //     url,
-        //     title,
-        // } => todo!(),
-        StyledBlock::ThematicBreak => LayoutItem::ThematicBreak {
-            left: cfg.canvas_opts.padding.left,
-            right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,
-        },
-        _ => todo!()
-    }
-}
-
 pub fn process_layouts(layouts: Vec<LayoutItem>, cfg: &SvgConfig) -> Vec<String> {
     // * Return value
     let mut svg_lines: Vec<String> = Vec::new();
@@ -398,7 +98,7 @@ pub fn process_layouts(layouts: Vec<LayoutItem>, cfg: &SvgConfig) -> Vec<String>
 
     while let Some(layout) = iter.next() {
         match &layout {
-            LayoutItem::Line(lyt) => {
+            LayoutItem::Block(lyt) => {
                 let (svgs, updated_y) = process_layout_line(lyt, cumulative_y_offset, cfg);
                 svg_lines.extend(svgs);
 
@@ -954,8 +654,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutItem::Line(_)));
-        let LayoutItem::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Block(_)));
+        let LayoutItem::Block(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
         // Assert segments match the input StyledLine's segments
@@ -1000,8 +700,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutItem::Line(_)));
-        let LayoutItem::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Block(_)));
+        let LayoutItem::Block(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
         // Assert segments match the input StyledLine's segments
@@ -1044,8 +744,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutItem::Line(_)));
-        let LayoutItem::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Block(_)));
+        let LayoutItem::Block(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1086,8 +786,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutItem::Line(_)));
-        let LayoutItem::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Block(_)));
+        let LayoutItem::Block(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1125,8 +825,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutItem::Line(_)));
-        let LayoutItem::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Block(_)));
+        let LayoutItem::Block(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1170,8 +870,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutItem::Line(_)));
-        let LayoutItem::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Block(_)));
+        let LayoutItem::Block(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
@@ -1210,8 +910,8 @@ mod tests {
 
         // * Assert
         // Assert LayoutResult is the Line variant (not Blank)
-        assert!(matches!(layout_result, LayoutItem::Line(_)));
-        let LayoutItem::Line(line) = layout_result else {
+        assert!(matches!(layout_result, LayoutItem::Block(_)));
+        let LayoutItem::Block(line) = layout_result else {
             panic!("Expected LayoutResult::Line");
         };
 
