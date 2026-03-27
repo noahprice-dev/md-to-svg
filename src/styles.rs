@@ -15,6 +15,7 @@ pub enum StyledInline {
     Text(String),
     Emphasis(Vec<StyledInline>),
     Strong(Vec<StyledInline>),
+    InlineCode(String),
     Link {
         text: Vec<StyledInline>,
         url: String,
@@ -79,6 +80,23 @@ impl StyledInline {
             StyledInline::Strong(styled_inlines) => {
                 let ctx = StyleContext { bold: true, ..ctx };
                 styled_inlines
+                    .into_iter()
+                    .flat_map(|child| child.transform(ctx))
+                    .collect()
+            }
+            StyledInline::InlineCode(code) => {
+                // ? `monospace` formatting overrides prior context as it has higher precedence.
+                // ? Per commonmark spec: 0.31.2 section 6.1 Code Spans:
+                // ? > Code span backticks have higher precedence than any other inline constructs except HTML tags and autolinks.
+                
+                // todo add doctest here.
+                let ctx = StyleContext {
+                    monospace: true,
+                    bold: false,
+                    italic: false
+                };
+                // Needs to recurse, but does not contain a Vec<StyledInline>. So we need to wrap it in a Text variant.
+                vec![StyledInline::Text(code)]
                     .into_iter()
                     .flat_map(|child| child.transform(ctx))
                     .collect()

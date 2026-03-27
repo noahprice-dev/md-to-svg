@@ -6,6 +6,14 @@ This is a paragraph with some **bold text** and some *italic text* and even ***b
 
 Another paragraph with `inline code` in the middle.
 
+Thematic break
+
+***
+
+---
+
+___
+
 ## Lists
 
 ### Unordered Lists

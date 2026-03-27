@@ -40,12 +40,14 @@ pub fn process_md_to_svg(
 
     let styled_lines: Vec<crate::styles::StyledBlock> = node_to_styled_block(&root, 0);
 
-    //println!("Styled Lines: {:#?}", styled_lines);
     let layout_lines = styled_lines
-        .into_iter() //? note into_iter consumes the original!
+        .into_iter()
         .map(|block| match block {
             // Handle non-textual structural items..
-            crate::styles::StyledBlock::ThematicBreak => todo!(),
+            crate::styles::StyledBlock::ThematicBreak => LayoutItem::ThematicBreak {
+                left: cfg.canvas_opts.padding.left,
+                right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,
+            },
             _ => LayoutItem::Block(block.into_layout_block(cfg, font_system)),
         })
         .collect::<Vec<LayoutItem>>();

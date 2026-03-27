@@ -1,10 +1,6 @@
-use cosmic_text::Buffer;
 use markdown::mdast::Node;
 
-use crate::{
-    layout::LayoutInline,
-    styles::{StyledBlock, StyledInline},
-};
+use crate::styles::{StyledBlock, StyledInline};
 
 fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
     match node {
@@ -37,10 +33,11 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
             // ? Per spec 0.31.2:
             // ? A conforming parser may render a soft line break in HTML either as a line ending or as a space.
             // ? A renderer may also provide an option to render soft line breaks as hard line breaks.
+            // ?
             // ? Therefore, we probably need to handle some cfg directive for this for perfect conformity. I am willing to remain opinionated for now.
             let normalized = text.value.trim_matches('\n').replace("\n", " ").to_string();
 
-            // This is a final node. We can collapse into a new StyledBlock.
+            // This is a leaf node. We can collapse into a new StyledBlock.
             vec![StyledInline::Text(normalized)]
         }
         Node::Html(html) => {
@@ -60,8 +57,8 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
         Node::InlineCode(code) => {
             let normalized = code.value.trim_matches('\n').replace("\n", " ").to_string();
 
-            // This is a final node. We can collapse into a new StyledBlock.
-            vec![StyledInline::Text(normalized)]
+            // This is a leaf node. We can collapse into a new StyledBlock.
+            vec![StyledInline::InlineCode(normalized)]
         }
         Node::Link(link) => todo!(),
         Node::Break(_) => {
@@ -79,6 +76,8 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
     }
 }
 
+// TODO update to properly pass node children down instead of node direct ala Heading, Paragraph
+// TODO Investigate Header style incorrect - size & bold not present
 pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
     match node {
         Node::Root(root) => {
@@ -89,14 +88,22 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
             lines
         }
         Node::Heading(heading) => {
-            let segments = node_to_styled_inline(node);
+            let segments = heading
+                .children
+                .iter()
+                .flat_map(|child| node_to_styled_inline(child))
+                .collect();
             vec![StyledBlock::Header {
                 segments,
                 level: heading.depth,
             }]
         }
-        Node::Paragraph(_) => {
-            let segments = node_to_styled_inline(node);
+        Node::Paragraph(paragraph) => {
+            let segments = paragraph
+                .children
+                .iter()
+                .flat_map(|child| node_to_styled_inline(child))
+                .collect();
             vec![StyledBlock::Paragraph { segments: segments }]
         }
         Node::Html(_) => {
@@ -127,10 +134,13 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
                             Node::Blockquote(_) => {
                                 todo!()
                             }
-
-                            leaf_block => {
+                            Node::Paragraph(paragraph) => {
                                 // * Parse inline styles
-                                let segments = node_to_styled_inline(leaf_block);
+                                let segments = paragraph
+                                    .children
+                                    .iter()
+                                    .flat_map(|child| node_to_styled_inline(child))
+                                    .collect();
 
                                 // * Handle Bullet List vs Numbered List
                                 if list.ordered {
@@ -144,6 +154,7 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
                                     lines.push(StyledBlock::BulletListItem { segments, indent });
                                 }
                             }
+                            _ => todo!(),
                         }
                     }
                 }
