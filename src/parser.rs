@@ -1,7 +1,10 @@
 use cosmic_text::Buffer;
 use markdown::mdast::Node;
 
-use crate::{layout::LayoutInline, styles::{StyledBlock, StyledInline}};
+use crate::{
+    layout::LayoutInline,
+    styles::{StyledBlock, StyledInline},
+};
 
 fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
     match node {
@@ -31,9 +34,9 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
             // * while not breaking up sentences that were formatted a certain way for the MD editor.
             // ? To note - CommonMark allows both implicit soft breaks with a `newline` character such as what we are removing here,
             // ? As well as the markdown typical "space space" ending a line.
-            // ? Per spec 0.31.2: 
-                // ? A conforming parser may render a soft line break in HTML either as a line ending or as a space.
-                // ? A renderer may also provide an option to render soft line breaks as hard line breaks.
+            // ? Per spec 0.31.2:
+            // ? A conforming parser may render a soft line break in HTML either as a line ending or as a space.
+            // ? A renderer may also provide an option to render soft line breaks as hard line breaks.
             // ? Therefore, we probably need to handle some cfg directive for this for perfect conformity. I am willing to remain opinionated for now.
             let normalized = text.value.trim_matches('\n').replace("\n", " ").to_string();
 

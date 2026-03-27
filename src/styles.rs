@@ -206,7 +206,7 @@ impl StyledBlock {
             StyledBlock::BulletListItem { segments, indent } => {
                 let indent_size =
                     indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
- 
+
                 // * Update our available_width based on the indent and padding.
                 let available_width = cfg.canvas_opts.width
                     - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
@@ -244,7 +244,7 @@ impl StyledBlock {
             } => {
                 let indent_size =
                     indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
-                    
+
                 let available_width = cfg.canvas_opts.width
                     - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
                     - indent_size;

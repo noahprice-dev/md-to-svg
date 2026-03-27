@@ -1,12 +1,17 @@
 use std::{
-    fs::{self, File}, io::{BufWriter, ErrorKind, Write}, path::Path
+    fs::{self, File},
+    io::{BufWriter, ErrorKind, Write},
+    path::Path,
 };
 
 use cosmic_text::FontSystem;
 use markdown::ParseOptions;
 
 use crate::{
-    MdToSvgError, config::SvgConfig, layout::{LayoutItem, process_layouts}, parser::node_to_styled_block
+    MdToSvgError,
+    config::SvgConfig,
+    layout::{LayoutItem, process_layouts},
+    parser::node_to_styled_block,
 };
 
 pub fn process_md_to_svg(
@@ -17,9 +22,7 @@ pub fn process_md_to_svg(
     // Read a file and handle invalid file path, unreadable file.
 
     let raw_text = fs::read_to_string(input_path).map_err(|err| match err.kind() {
-        ErrorKind::NotFound => {
-            MdToSvgError::InputNotFound(input_path.to_path_buf())
-        }
+        ErrorKind::NotFound => MdToSvgError::InputNotFound(input_path.to_path_buf()),
         // ? Generic case, something went wrong in the input, but we haven't specified it in this match statement.
         _ => MdToSvgError::InputUnreadable(input_path.to_path_buf(), err),
     })?;
@@ -35,13 +38,12 @@ pub fn process_md_to_svg(
     // * It should only fail if JSX/MDX is enabled, AND that parsing fails.
     let root = markdown::to_mdast(&md_text, &ParseOptions::default())?;
 
-    let styled_lines: Vec<crate::styles::StyledBlock>  = node_to_styled_block(&root, 0);
-    
+    let styled_lines: Vec<crate::styles::StyledBlock> = node_to_styled_block(&root, 0);
+
     //println!("Styled Lines: {:#?}", styled_lines);
     let layout_lines = styled_lines
         .into_iter() //? note into_iter consumes the original!
         .map(|block| match block {
-            
             // Handle non-textual structural items..
             crate::styles::StyledBlock::ThematicBreak => todo!(),
             _ => LayoutItem::Block(block.into_layout_block(cfg, font_system)),
@@ -49,7 +51,7 @@ pub fn process_md_to_svg(
         .collect::<Vec<LayoutItem>>();
 
     let text_tags = process_layouts(layout_lines, cfg);
-    
+
     let svg_file = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
         <svg
@@ -90,4 +92,3 @@ pub fn write_svg_to_file(
 
     Ok(())
 }
-

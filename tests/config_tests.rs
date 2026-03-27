@@ -11,10 +11,14 @@ use md_to_svg::{
 use crate::common::get_normalized_fixture_path;
 pub mod common;
 
-
 #[test]
 fn partial_preset_overrides_specified_fields_and_preserves_defaults() {
-    let preset_cfg = load_preset_config(get_normalized_fixture_path(&["tests", "fixtures", "only_padding.toml"])).unwrap();
+    let preset_cfg = load_preset_config(get_normalized_fixture_path(&[
+        "tests",
+        "fixtures",
+        "only_padding.toml",
+    ]))
+    .unwrap();
     let combined_settings = config::Config::builder()
         .add_source(
             config::Config::try_from(&SvgConfig::default())
@@ -50,7 +54,8 @@ fn load_preset_config_returns_config_not_found_for_missing_file() {
 
 #[test]
 fn load_preset_config_returns_parse_failed_for_invalid_toml() {
-    let invalid_path: PathBuf = get_normalized_fixture_path(&["tests", "fixtures","invalid_cfg.toml"]);
+    let invalid_path: PathBuf =
+        get_normalized_fixture_path(&["tests", "fixtures", "invalid_cfg.toml"]);
     let preset_cfg = load_preset_config(invalid_path);
     assert!(matches!(
         preset_cfg,
@@ -60,7 +65,12 @@ fn load_preset_config_returns_parse_failed_for_invalid_toml() {
 
 #[test]
 fn complete_preset_overrides_all_fields() {
-    let preset_cfg = load_preset_config(get_normalized_fixture_path(&["tests", "fixtures","complete_override.toml"])).unwrap();
+    let preset_cfg = load_preset_config(get_normalized_fixture_path(&[
+        "tests",
+        "fixtures",
+        "complete_override.toml",
+    ]))
+    .unwrap();
     let combined_settings = config::Config::builder()
         .add_source(
             config::Config::try_from(&SvgConfig::default())
@@ -106,11 +116,9 @@ fn complete_preset_overrides_all_fields() {
             header_margin_bot: 50.,
         },
     };
-    
+
     pretty_assertions::assert_eq!(result, expected);
 }
 
 #[test]
-fn preset_padding_parses_alll_css_shorthand_forms() {
-    
-}
+fn preset_padding_parses_alll_css_shorthand_forms() {}

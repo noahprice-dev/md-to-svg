@@ -154,7 +154,7 @@ pub struct TypographyConfig {
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
-    pub line_height_factor: f32, 
+    pub line_height_factor: f32,
     pub paragraph_spacing_factor: f32,
     pub bullet_indent_em: f32,
     pub bullet_char: String,
@@ -405,31 +405,28 @@ mod tests {
 
         assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 40.0));
     }
-    
+
     // * --- Header Scales ---
-    
+
     #[test]
-    
+
     fn scale_for_level_returns_correct_scale_for_all_valid_levels() {
         // Create a HeaderScales
         let header_scales = HeaderScales::default();
-        
+
         assert_eq!(header_scales.scale_for_level(1), 2.0);
         assert_eq!(header_scales.scale_for_level(2), 1.6);
         assert_eq!(header_scales.scale_for_level(3), 1.3);
         assert_eq!(header_scales.scale_for_level(4), 1.1);
         assert_eq!(header_scales.scale_for_level(5), 1.0);
         assert_eq!(header_scales.scale_for_level(6), 1.0);
-        
-        
     }
-    
+
     #[test]
     #[should_panic(expected = "Expected a value between 1 and 6 inclusive")]
     fn scale_for_level_panics_on_invalid_level() {
         let header_scales = HeaderScales::default();
-        
+
         header_scales.scale_for_level(99);
     }
-    
 }

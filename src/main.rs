@@ -30,7 +30,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let settings = builder
-        .add_source(config::Config::try_from(&cli.overrides).expect("BUG: CLI Overrides should always serialize"))
+        .add_source(
+            config::Config::try_from(&cli.overrides)
+                .expect("BUG: CLI Overrides should always serialize"),
+        )
         .build()?;
     let svg_cfg: SvgConfig = settings.try_deserialize().unwrap();
 

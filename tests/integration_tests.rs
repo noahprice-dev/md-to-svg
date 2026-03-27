@@ -1,7 +1,7 @@
 use cosmic_text::{FamilyOwned, Style, Weight};
-use md_to_svg::layout::{ process_layouts, styled_line_to_layout};
 use md_to_svg::config::SvgConfig;
-use md_to_svg::styles::{StyledSpan, StyledBlock, StyledInline};
+use md_to_svg::layout::{process_layouts, styled_line_to_layout};
+use md_to_svg::styles::{StyledBlock, StyledInline, StyledSpan};
 
 use crate::common::{create_default_test_font_system, normalize_svg_for_comparison};
 
@@ -121,11 +121,7 @@ fn process_layouts_hard_break_preserves_text_content() {
     let paragraph_text_lower =
         r#"but also includes some special characters such as "Quotes", < > & '"#.to_string();
 
-    let expected = [
-        paragraph_text_upper.as_str(),
-        paragraph_text_lower.as_str(),
-    ]
-    .join(" ");
+    let expected = [paragraph_text_upper.as_str(), paragraph_text_lower.as_str()].join(" ");
 
     let styled_line = StyledBlock::Paragraph {
         segments: vec![

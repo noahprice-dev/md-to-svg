@@ -65,7 +65,7 @@ impl LayoutItem {
 }
 
 /// A range of glyph indices in the source text that carry a consistent style.
-/// 
+///
 // ? *This is used to map the result of Cosmic's shaping to the parsed styles, as this is lost during transformation.*
 #[derive(Debug)]
 pub struct StyledInlineRange {
@@ -412,7 +412,7 @@ mod tests {
         let font_sys = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
         font_sys
     }
-    
+
     // * --- tspan_to_svg ---
     #[test]
     fn tspans_to_svg_preserves_bold_weight_includes_attribute() {
