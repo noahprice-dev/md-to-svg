@@ -387,9 +387,9 @@ fn create_buffer(
 #[cfg(test)]
 mod tests {
     use cosmic_text::{
-        FamilyOwned, FontSystem, Style, Weight, fontdb::Database, skrifa::raw::tables::layout,
+        FamilyOwned, FontSystem, Style, Weight, fontdb::Database,
     };
-    use std::{path::Path, result};
+    use std::{path::Path,};
 
     use crate::{
         config::SvgConfig,
@@ -416,7 +416,7 @@ mod tests {
 
     // TODO RENAME
     #[test]
-    fn styled_block_paragraph_transforms_to_layout_block() {
+    fn into_layout_block_paragraph_transforms_to_layout_block() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
         let cfg = SvgConfig::default();
@@ -464,6 +464,127 @@ mod tests {
         assert_eq!(layout_result.margin_bottom, expected.margin_bottom);
         assert_eq!(layout_result.prefix_len, expected.prefix_len);
         assert_eq!(layout_result.indent_offset, expected.indent_offset);
+    }
+
+    #[test]
+    fn into_layout_line_applies_styling() {
+        // * Arrange
+
+        let ital_text = String::from("Hello ");
+        let norm_text = String::from("World");
+
+        let styled_segments = vec![
+            StyledInline::Emphasis(vec![StyledInline::Text(ital_text.clone())]),
+            StyledInline::Text(norm_text.clone()),
+        ];
+
+        // * Act
+        let layout_inlines: Vec<LayoutInline> = styled_segments
+            .into_iter()
+            .flat_map(|line| line.into_layout_inline())
+            .collect();
+        // * Assert
+
+        assert_eq!(
+            layout_inlines[0],
+            LayoutInline::Text {
+                text: ital_text, // ? Why can't I insert a real var here?
+                weight: Weight::NORMAL,
+                style: Style::Italic,
+                family: FamilyOwned::SansSerif
+            }
+        );
+        assert_eq!(
+            layout_inlines[1],
+            LayoutInline::Text {
+                text: norm_text,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif
+            }
+        );
+    }
+
+    #[test]
+    fn into_layout_line_applies_nested_styling() {
+        // * Arrange
+
+        let ital_text = String::from("Hello ");
+        let bold_text = String::from("World");
+
+        #[rustfmt::skip]
+        let styled_segments = vec![
+            StyledInline::Emphasis(vec![
+                StyledInline::Text(ital_text.clone()),
+                StyledInline::Strong(vec![
+                    StyledInline::Text(bold_text.clone())]),
+        ])];
+
+        // * Act
+        let layout_inlines: Vec<LayoutInline> = styled_segments
+            .into_iter()
+            .flat_map(|line| line.into_layout_inline())
+            .collect();
+        // * Assert
+
+        assert_eq!(
+            layout_inlines[0],
+            LayoutInline::Text {
+                text: ital_text,
+                weight: Weight::NORMAL,
+                style: Style::Italic,
+                family: FamilyOwned::SansSerif
+            }
+        );
+        assert_eq!(
+            layout_inlines[1],
+            LayoutInline::Text {
+                text: bold_text,
+                weight: Weight::BOLD,
+                style: Style::Italic,
+                family: FamilyOwned::SansSerif
+            }
+        );
+    }
+
+    #[test]
+    fn into_layout_line_inline_code_overrides_parent_styling() {
+        // * Arrange
+        let ital_text = String::from("Hello ");
+        let bold_text = String::from("World");
+
+        #[rustfmt::skip]
+        let styled_segments = vec![
+            StyledInline::Emphasis(vec![
+                StyledInline::Text(ital_text.clone()),
+                StyledInline::InlineCode(bold_text.clone()),
+        ])];
+
+        // * Act
+        let layout_inlines: Vec<LayoutInline> = styled_segments
+            .into_iter()
+            .flat_map(|line| line.into_layout_inline())
+            .collect();
+
+        // * Assert
+        assert_eq!(
+            layout_inlines[0],
+            LayoutInline::Text {
+                text: ital_text,
+                weight: Weight::NORMAL,
+                style: Style::Italic,
+                family: FamilyOwned::SansSerif
+            }
+        );
+        assert_eq!(
+            layout_inlines[1],
+            LayoutInline::Text {
+                text: bold_text,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::Monospace
+            }
+        );
     }
 
     #[test]
@@ -593,7 +714,7 @@ mod tests {
     }
 
     #[test]
-    fn styled_line_to_numbered_list_item_applies_prefix_length() {
+    fn into_layout_block_numbered_list_item_applies_prefix_length() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
         let cfg = SvgConfig::default();
@@ -617,7 +738,7 @@ mod tests {
     }
 
     #[test]
-    fn styled_line_to_numbered_list_item_applies_indent_offset() {
+    fn into_layout_block_numbered_list_item_applies_indent_offset() {
         // * Arrange
         let mut font_system = create_default_test_font_system();
         let cfg = SvgConfig::default();
@@ -642,33 +763,5 @@ mod tests {
             layout_result.indent_offset,
             3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? List Items are indented by 1 unit by default - so indent = indent + 1 * indent_size
         );
-    }
-
-    // TODO revisit
-    // #[test]
-    // fn styled_line_blank_returns_line_height() {
-    //     // * Arrange
-    //     let mut font_system = create_default_test_font_system();
-    //     let cfg = SvgConfig::default();
-
-    //     // Create a blank StyledLine
-    //     let styled_line_para = StyledBlock::Blank;
-
-    //     // * Act
-    //     let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
-
-    //     // * Assert
-    //     // Assert LayoutResult is the Line variant (not Blank)
-    //     assert!(matches!(layout_result, LayoutItem::Blank { height: _ }));
-    //     let LayoutItem::Blank { height } = layout_result else {
-    //         panic!("Expected LayoutResult::Blank");
-    //     };
-    //     assert_eq!(height, cfg.calculate_paragraph_spacing_px());
-    // }
-
-    #[test]
-    fn into_layout_block_inline_code_overrides_parent_styles() {
-        // * Arrange
-        todo!()
     }
 }
