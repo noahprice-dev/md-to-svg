@@ -30,6 +30,7 @@ impl StyledInline {
         // StyledInline::Text(StyledSpan::new(text, ctx))
         self.transform(StyleContext::default())
     }
+    // TODO this could be a doc-comment test
     /// These collections are flattened into a LayoutInline by parsing the style associated
     /// with each container type, then recursively flattening any children containers and recording
     /// the style of said container. The final returned value is a `LayoutInline::Text` that has the appropriate styling over the provided range.
@@ -37,12 +38,11 @@ impl StyledInline {
     /// provided during AST parsing.
     ///
     /// For example:
-    /// ```
-    /// <i><b>This text is Strong and Emphasized</i></b>
-    /// ```
+    /// 
+    /// `<i><b>This text is Strong and Emphasized</i></b>`
+    /// 
     /// Becomes
-    /// LayoutInline::Text{text: "This text is Strong and Emphasized", weight: Weight::Bold, style: Style::Italic, family, ...
-    /// }
+    /// `LayoutInline::Text{text: "This text is Strong and Emphasized", weight: Weight::Bold, style: Style::Italic, family, ...}`
     fn transform(self, ctx: StyleContext) -> Vec<LayoutInline> {
         match self {
             StyledInline::Text(span) => {
@@ -291,7 +291,7 @@ impl StyledBlock {
         }
     }
 
-    // TODO remove? This is just used for debugging andd printing in-progress types..
+    // TODO remove? This is just used for debugging and printing in-progress types..
     pub fn get_type(&self) -> String {
         match self {
             StyledBlock::Header { .. } => String::from("Header"),
@@ -414,7 +414,6 @@ mod tests {
         font_sys
     }
 
-    // TODO RENAME
     #[test]
     fn into_layout_block_paragraph_transforms_to_layout_block() {
         // * Arrange

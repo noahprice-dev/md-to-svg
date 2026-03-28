@@ -402,13 +402,10 @@ fn html_escape(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-// TODO Refactor tests with new names.
 #[cfg(test)]
 mod tests {
     use crate::layout::{LayoutInline, TspanDefinition, build_styled_inline_ranges, tspans_to_svg};
     use cosmic_text::{FamilyOwned, Style, Weight};
-
-    // * --- utilities ---
 
     // * --- tspan_to_svg ---
     #[test]
