@@ -211,8 +211,11 @@ impl StyledBlock {
                 }
             }
             StyledBlock::BulletListItem { segments, indent } => {
-                let indent_size =
-                    indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+                let indent_size = if cfg.text_opts.indent_first_bullet {
+                    (indent + 1) as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+                } else {
+                    indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+                };
 
                 // * Update our available_width based on the indent and padding.
                 let available_width = cfg.canvas_opts.width
@@ -249,8 +252,11 @@ impl StyledBlock {
                 number,
                 indent,
             } => {
-                let indent_size =
-                    indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size);
+                let indent_size = if cfg.text_opts.indent_first_bullet {
+                    (indent + 1) as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+                } else {
+                    indent as f32 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size)
+                };
 
                 let available_width = cfg.canvas_opts.width
                     - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right)
@@ -631,7 +637,7 @@ mod tests {
         let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system);
 
         // * Assert
-        
+
         assert_eq!(
             layout_result.indent_offset,
             3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? List Items are indented by 1 unit by default - so indent = indent + 1 * indent_size
@@ -659,8 +665,8 @@ mod tests {
     //     };
     //     assert_eq!(height, cfg.calculate_paragraph_spacing_px());
     // }
-    
-        #[test]
+
+    #[test]
     fn into_layout_block_inline_code_overrides_parent_styles() {
         // * Arrange
         todo!()
