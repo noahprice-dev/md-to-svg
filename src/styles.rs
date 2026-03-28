@@ -88,12 +88,12 @@ impl StyledInline {
                 // ? `monospace` formatting overrides prior context as it has higher precedence.
                 // ? Per commonmark spec: 0.31.2 section 6.1 Code Spans:
                 // ? > Code span backticks have higher precedence than any other inline constructs except HTML tags and autolinks.
-                
+
                 // todo add doctest here.
                 let ctx = StyleContext {
                     monospace: true,
                     bold: false,
-                    italic: false
+                    italic: false,
                 };
                 // Needs to recurse, but does not contain a Vec<StyledInline>. So we need to wrap it in a Text variant.
                 vec![StyledInline::Text(code)]
@@ -124,6 +124,7 @@ impl StyledInline {
 /// Block level definitions.
 /// Provides styling directives for specific line level containers (Lists, Blockquote)
 /// As well as Block leaves such as Paragraph or Headers and non-text structural elements such as Thematic Break (Horizontal Rule)
+/// This is a container or abstract type that loosely wraps style data.
 #[derive(Clone, Debug)]
 pub enum StyledBlock {
     Header {
@@ -145,19 +146,6 @@ pub enum StyledBlock {
     Blockquote {
         text: String,
     },
-    // ? Are these valid BlockTypes?
-    // Link {
-    //     // ? Can be formatted text.
-    //     text: Vec<StyledInline>,
-    //     url: String,
-    //     title: Option<String>,
-    // },
-    // Image {
-    //     // ? Cannot be formatted text.
-    //     description: Option<String>,
-    //     url: String,
-    //     title: Option<String>,
-    // },
     ThematicBreak,
 }
 
@@ -194,6 +182,7 @@ impl StyledBlock {
             StyledBlock::Header { segments, level } => {
                 let scaled_font_size =
                     cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(level);
+                println!("Scaled Font Size (into layout block): {}", scaled_font_size);
 
                 let available_width = cfg.canvas_opts.width
                     - (cfg.canvas_opts.padding.left + cfg.canvas_opts.padding.right);
@@ -214,7 +203,7 @@ impl StyledBlock {
                 LayoutBlock {
                     buffer,
                     segments: layout_lines,
-                    font_size: cfg.text_opts.font_size,
+                    font_size: scaled_font_size,
                     prefix_len: 0,
                     indent_offset: 0.0,
                     margin_top: cfg.calculate_paragraph_spacing_px(),
@@ -387,4 +376,293 @@ fn create_buffer(
     buffer.set_size(font_system, Some(width), Some(f32::MAX));
 
     buffer
+}
+
+#[cfg(test)]
+mod tests {
+    use cosmic_text::{
+        FamilyOwned, FontSystem, Style, Weight, fontdb::Database, skrifa::raw::tables::layout,
+    };
+    use std::{path::Path, result};
+
+    use crate::{
+        config::SvgConfig,
+        layout::{LayoutBlock, LayoutInline, LayoutItem},
+        styles::{StyledBlock, StyledInline, create_buffer},
+    };
+
+    /// Create a simple FontSystem with default Sans-Serif font derived from tests/fonts.
+    fn create_default_test_font_system() -> FontSystem {
+        // Create a default, empty FontDB
+        let mut db = Database::new();
+        // * Load Noto Sans from tests/fonts/
+        // ? We load all fonts in this directory instead of loading the individual font variants (Italic, Bold etc)
+        // ? Our default case is to access all of these, rather than loading specific fonts for each test.
+        // ? we could break this out to accept a Weight/Style variant struct as an arg, and match accordingly later on if we need.
+        db.load_fonts_dir(Path::new("tests/fonts/"));
+
+        // override default Sans-Serif on db.
+        db.set_sans_serif_family("Noto Sans");
+
+        let font_sys = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
+        font_sys
+    }
+
+    // TODO RENAME
+    #[test]
+    fn styled_block_paragraph_transforms_to_layout_block() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let paragraph_text = "This is some paragraph text.".to_string();
+
+        let styled_segments = vec![StyledInline::Text(paragraph_text.clone())];
+        let layout_segments: Vec<LayoutInline> = styled_segments
+            .iter()
+            .flat_map(|seg| seg.clone().into_layout_inline())
+            .collect();
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledBlock::Paragraph {
+            segments: styled_segments.clone(),
+        };
+
+        // * Act
+        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system);
+        let expected: LayoutBlock = LayoutBlock {
+            buffer: create_buffer(
+                &vec![LayoutInline::Text {
+                    text: paragraph_text.clone(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                }],
+                cfg.text_opts.font_size,
+                cfg.calculate_line_height_px(),
+                cfg.canvas_opts.width,
+                &mut font_system,
+                None,
+            ),
+            segments: layout_segments,
+            font_size: cfg.text_opts.font_size,
+            prefix_len: 0,
+            indent_offset: 0.0,
+            margin_top: cfg.calculate_paragraph_spacing_px(),
+            margin_bottom: cfg.calculate_paragraph_spacing_px(),
+        };
+        // * Assert
+        assert_eq!(layout_result.font_size, expected.font_size);
+        assert_eq!(layout_result.segments, expected.segments);
+        assert_eq!(layout_result.margin_top, expected.margin_top);
+        assert_eq!(layout_result.margin_bottom, expected.margin_bottom);
+        assert_eq!(layout_result.prefix_len, expected.prefix_len);
+        assert_eq!(layout_result.indent_offset, expected.indent_offset);
+    }
+
+    #[test]
+    fn into_layout_block_handles_hard_break() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let paragraph_text = "This is some paragraph text.".to_string();
+
+        let styled_segments = vec![
+            StyledInline::Text(paragraph_text.clone()),
+            StyledInline::HardBreak,
+        ];
+        let layout_segments: Vec<LayoutInline> = styled_segments
+            .iter()
+            .flat_map(|seg| seg.clone().into_layout_inline())
+            .collect();
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledBlock::Paragraph {
+            segments: styled_segments.clone(),
+        };
+
+        // * Act
+        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system);
+        let expected: LayoutBlock = LayoutBlock {
+            buffer: create_buffer(
+                &vec![
+                    LayoutInline::Text {
+                        text: paragraph_text.clone(),
+                        weight: Weight::NORMAL,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif,
+                    },
+                    LayoutInline::HardBreak,
+                ],
+                cfg.text_opts.font_size,
+                cfg.calculate_line_height_px(),
+                cfg.canvas_opts.width,
+                &mut font_system,
+                None,
+            ),
+            segments: layout_segments,
+            font_size: cfg.text_opts.font_size,
+            prefix_len: 0,
+            indent_offset: 0.0,
+            margin_top: cfg.calculate_paragraph_spacing_px(),
+            margin_bottom: cfg.calculate_paragraph_spacing_px(),
+        };
+        // * Assert
+        assert_eq!(layout_result.segments, expected.segments);
+    }
+
+    #[test]
+    fn into_layout_block_header_applies_cfg_font_scale() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let header_text = "# Header".to_string();
+
+        let segments = vec![StyledInline::Text(header_text.clone())];
+
+        let styled_block_paragraph = StyledBlock::Header {
+            segments: segments.clone(),
+            level: 1,
+        };
+
+        // * Act
+        let layout_result = styled_block_paragraph.into_layout_block(&cfg, &mut font_system);
+
+        // * Assert
+        assert_eq!(
+            layout_result.font_size,
+            cfg.text_opts.font_size * cfg.header_opts.header_scales.scale_for_level(1)
+        );
+    }
+
+    #[test]
+    fn into_layout_block_bullet_list_item_applies_prefix_length() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let bullet_item_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledInline::Text(bullet_item_text)];
+
+        // Create a basic StyledLine
+        let styled_block_bullet_item = StyledBlock::BulletListItem {
+            segments: segments.clone(),
+            indent: 0,
+        };
+
+        // * Act
+        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system);
+
+        // * Assert
+        assert_eq!(layout_result.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
+    }
+
+    #[test]
+    fn into_layout_block_bullet_list_item_applies_indent_offset() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let bullet_item_text = "- Bullet Item".to_string();
+
+        let segments = vec![StyledInline::Text(bullet_item_text)];
+
+        // ? Assume item is 3 layers deep.
+        let styled_block_bullet_item = StyledBlock::BulletListItem {
+            segments: segments.clone(),
+            indent: 3, // ? Derived from AST
+        };
+
+        // * Act
+        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system);
+
+        // * Assert
+        assert_eq!(
+            layout_result.indent_offset,
+            4.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? List Items are indented by 1 unit by default - so indent = indent + 1 * indent_size
+        );
+    }
+
+    #[test]
+    fn styled_line_to_numbered_list_item_applies_prefix_length() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let list_item_text = "6. Numbered Item".to_string();
+
+        let segments = vec![StyledInline::Text(list_item_text)];
+
+        // Create a basic StyledLine
+        let styled_block_numbered_item = StyledBlock::NumberedListItem {
+            segments: segments.clone(),
+            number: 6, // ? Derived from AST
+            indent: 0,
+        };
+
+        // * Act
+        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system);
+
+        // * Assert
+        assert_eq!(layout_result.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
+    }
+
+    #[test]
+    fn styled_line_to_numbered_list_item_applies_indent_offset() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let list_item_text = "2. Nested Number Item".to_string();
+
+        let segments = vec![StyledInline::Text(list_item_text)];
+
+        // Create a basic StyledLine
+        let styled_block_numbered_item = StyledBlock::NumberedListItem {
+            segments: segments.clone(),
+            number: 2,
+            indent: 2,
+        };
+
+        // * Act
+        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system);
+
+        // * Assert
+        
+        assert_eq!(
+            layout_result.indent_offset,
+            3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? List Items are indented by 1 unit by default - so indent = indent + 1 * indent_size
+        );
+    }
+
+    // TODO revisit
+    // #[test]
+    // fn styled_line_blank_returns_line_height() {
+    //     // * Arrange
+    //     let mut font_system = create_default_test_font_system();
+    //     let cfg = SvgConfig::default();
+
+    //     // Create a blank StyledLine
+    //     let styled_line_para = StyledBlock::Blank;
+
+    //     // * Act
+    //     let layout_result = styled_line_to_layout(styled_line_para, &mut font_system, &cfg);
+
+    //     // * Assert
+    //     // Assert LayoutResult is the Line variant (not Blank)
+    //     assert!(matches!(layout_result, LayoutItem::Blank { height: _ }));
+    //     let LayoutItem::Blank { height } = layout_result else {
+    //         panic!("Expected LayoutResult::Blank");
+    //     };
+    //     assert_eq!(height, cfg.calculate_paragraph_spacing_px());
+    // }
+    
+        #[test]
+    fn into_layout_block_inline_code_overrides_parent_styles() {
+        // * Arrange
+        todo!()
+    }
 }
