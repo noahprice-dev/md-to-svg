@@ -60,7 +60,7 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
             // This is a leaf node. We can collapse into a new StyledBlock.
             vec![StyledInline::InlineCode(normalized)]
         }
-        Node::Link(link) => todo!(),
+        Node::Link(_link) => todo!(),
         Node::Break(_) => {
             vec![StyledInline::HardBreak]
         }
@@ -161,11 +161,11 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
             }
             lines
         }
-        Node::Blockquote(blockquote) => todo!(),
+        Node::Blockquote(_blockquote) => todo!(),
         Node::ThematicBreak(_) => {
             vec![StyledBlock::ThematicBreak]
         }
-        Node::Image(img) => todo!(),
+        Node::Image(_img) => todo!(),
 
         unknown => {
             eprintln!(

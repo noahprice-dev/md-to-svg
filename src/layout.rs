@@ -143,7 +143,7 @@ fn process_layout_line(layout: &LayoutBlock, y_cursor: f32, cfg: &SvgConfig) -> 
             .map(|seg| match seg {
                 LayoutInline::Text { text, .. } => text.clone(),
                 LayoutInline::HardBreak => "\n".to_string(),
-                LayoutInline::InlineLink { link_text, .. } => todo!(), // ! Handle unpacking recursion here.
+                LayoutInline::InlineLink { link_text: _, .. } => todo!(), // ! Handle unpacking recursion here.
             })
             .collect();
 

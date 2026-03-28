@@ -363,9 +363,9 @@ fn create_buffer(
         }
         // TODO
         LayoutInline::InlineLink {
-            link_text,
-            url,
-            title,
+            link_text: _,
+            url: _,
+            title: _,
         } => todo!(),
     });
 
@@ -393,7 +393,7 @@ mod tests {
 
     use crate::{
         config::SvgConfig,
-        layout::{LayoutBlock, LayoutInline, LayoutItem},
+        layout::{LayoutBlock, LayoutInline},
         styles::{StyledBlock, StyledInline, create_buffer},
     };
 
