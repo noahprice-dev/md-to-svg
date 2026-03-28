@@ -77,7 +77,6 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
 }
 
 // TODO update to properly pass node children down instead of node direct ala Heading, Paragraph
-// TODO Investigate Header style incorrect - size & bold not present
 pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
     match node {
         Node::Root(root) => {

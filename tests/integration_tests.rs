@@ -17,9 +17,9 @@ fn process_layouts_creates_svg() {
         segments: vec![StyledInline::Text(paragraph_text.clone())],
     };
 
-    let layout_result = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
 
-    let svg_lines = process_layouts(vec![layout_result], &cfg);
+    let svg_lines = process_layouts(vec![layout_item], &cfg);
 
     assert_eq!(svg_lines.len(), 1);
     assert!(svg_lines[0].contains(&paragraph_text));
@@ -36,9 +36,9 @@ fn process_layout_line_long_soft_wrap_produces_multiple_lines() {
         segments: vec![StyledInline::Text(paragraph_text.clone())],
     };
 
-    let layout_result = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
 
-    let svg_lines = process_layouts(vec![layout_result], &cfg);
+    let svg_lines = process_layouts(vec![layout_item], &cfg);
 
     assert_eq!(svg_lines.len(), 3);
 }
@@ -58,9 +58,9 @@ fn process_layout_line_long_hard_break_produces_multiple_lines() {
         ],
     };
 
-    let layout_result = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
 
-    let svg_lines = process_layouts(vec![layout_result], &cfg);
+    let svg_lines = process_layouts(vec![layout_item], &cfg);
 
     assert_eq!(svg_lines.len(), 2);
     assert!(svg_lines[0].contains(&line_one));
@@ -78,9 +78,9 @@ fn process_layouts_soft_wrap_preserves_text_content() {
         segments: vec![StyledInline::Text(expected.clone())],
     };
 
-    let layout_result = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
 
-    let svg_lines = process_layouts(vec![layout_result], &cfg);
+    let svg_lines = process_layouts(vec![layout_item], &cfg);
 
     let actual = svg_lines
         .iter()
@@ -110,9 +110,9 @@ fn process_layouts_hard_break_preserves_text_content() {
         ],
     };
 
-    let layout_result = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
 
-    let svg_lines = process_layouts(vec![layout_result], &cfg);
+    let svg_lines = process_layouts(vec![layout_item], &cfg);
 
     let actual = svg_lines
         .iter()
@@ -121,4 +121,26 @@ fn process_layouts_hard_break_preserves_text_content() {
         .join(" ");
 
     assert!(actual.contains(&expected));
+}
+
+#[test]
+fn process_layouts_handles_thematic_break() {
+    let mut font_system = create_default_test_font_system();
+    let cfg = SvgConfig::default();
+    
+    let styled_block = StyledBlock::Paragraph { segments: vec![StyledInline::Text("Hello World".to_string())] };
+    let layout_items = vec![
+        LayoutItem::Block(
+            styled_block.into_layout_block(&cfg, &mut font_system)),
+        LayoutItem::ThematicBreak {
+                left: cfg.canvas_opts.padding.left,
+                right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,
+            }];
+
+    let svg_lines = process_layouts(layout_items, &cfg);
+    
+    assert_eq!(svg_lines.len(), 2);
+    
+    assert!(svg_lines[0].contains("Hello World"));
+    assert!(svg_lines[1].contains("<line"))
 }
