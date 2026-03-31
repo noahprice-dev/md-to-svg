@@ -60,7 +60,38 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
             // This is a leaf node. We can collapse into a new StyledBlock.
             vec![StyledInline::InlineCode(normalized)]
         }
-        Node::Link(_link) => todo!(),
+        Node::Link(link) => {
+            // ? link text can be styled
+            let link_text = link
+                .children
+                .iter()
+                .flat_map(|child| node_to_styled_inline(child))
+                .collect();
+
+            vec![StyledInline::InlineLink {
+                text: link_text,
+                url: link.url.clone(),
+                title: link.title.clone(),
+            }]
+        }
+        Node::LinkReference(link_ref) =>
+        // ? link text can be styled
+        {
+            let link_text = link_ref
+                .children
+                .iter()
+                .flat_map(|child| node_to_styled_inline(child))
+                .collect();
+            
+            // ? We need to reconnect this to a Definition block at the upper layer when we move into a Layout.
+            // ? I dislike including the type Definition as a Node layer right now, 
+            // ? though perhaps it can be treated at the pipeline level similarly to how we handle StyledBlock::ThematicBreak.
+            // ? We would need to process and store links and definitions separately from the Block type.
+            // ? Tricky to tie them back, but certainly possible. I would like to avoid certain
+            // ? side-effects like mutable objects outside of the scope - that feels nasty.
+            vec![StyledInline::LinkReference { text: link_text, identifier: link_ref.identifier.clone() }]
+        }
+        Node::Image(_img) => todo!(),
         Node::Break(_) => {
             vec![StyledInline::HardBreak]
         }
@@ -76,7 +107,6 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
     }
 }
 
-// TODO update to properly pass node children down instead of node direct ala Heading, Paragraph
 pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
     match node {
         Node::Root(root) => {
@@ -164,8 +194,7 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
         Node::ThematicBreak(_) => {
             vec![StyledBlock::ThematicBreak]
         }
-        Node::Image(_img) => todo!(),
-
+        Node::Definition(def) => vec![StyledBlock::Definition(def.clone())], // ? Does this need a custom type to ignore data?
         unknown => {
             eprintln!(
                 "Warning: Unsupported node type: {:#?}. Rendering as plain text..",

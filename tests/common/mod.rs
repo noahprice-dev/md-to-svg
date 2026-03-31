@@ -1,9 +1,10 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use cosmic_text::{
     Family, FontSystem, Style, Weight,
     fontdb::{Database, Query},
 };
+use markdown::mdast::Definition;
 
 /// Create a simple FontSystem with default Sans-Serif font derived from tests/fonts.
 pub fn create_default_test_font_system() -> FontSystem {
@@ -77,4 +78,11 @@ pub fn get_normalized_fixture_path(sub_paths: &[&str]) -> PathBuf {
 
     path.extend(sub_paths);
     path
+}
+
+/// In the case we are testing non-link inlines, we don't need a real definition map.
+/// Since HashMap will not allocate until it is inserted, we can satisfy the arguments
+/// Without actually allocating any memory.
+pub fn empty_definitions() -> HashMap<String, Definition> {
+    HashMap::new()
 }

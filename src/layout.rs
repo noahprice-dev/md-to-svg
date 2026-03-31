@@ -143,7 +143,15 @@ fn process_layout_line(layout: &LayoutBlock, y_cursor: f32, cfg: &SvgConfig) -> 
             .map(|seg| match seg {
                 LayoutInline::Text { text, .. } => text.clone(),
                 LayoutInline::HardBreak => "\n".to_string(),
-                LayoutInline::InlineLink { link_text: _, .. } => todo!(), // ! Handle unpacking recursion here.
+                // ? We are repeating ourself here, is there a world where we want to have an "Extract Raw Text" method on LayoutInline?
+                // ? I think unless we need to do this again, its fine.
+                LayoutInline::InlineLink { link_text, .. } => {
+                    link_text.iter().map(|txt| match txt {
+                        LayoutInline::Text { text, ..} => text.clone(),
+                        LayoutInline::HardBreak => "\n".to_string(),
+                        _ => unreachable!("InlineLink cannot have a nested link"),
+                    }).collect()
+                }, 
             })
             .collect();
 
@@ -239,18 +247,21 @@ fn process_run(
             }
         };
 
+        // TODO Can we collapse this into a single function to return TspanDefinition?
         // Check if we have moved into a different segment.
         if let Some(prev_idx) = current_segment_idx {
             if prev_idx != segment_idx {
                 // Emit the accumulated text as a TSpan with styling from the previous segment.
                 let (weight, style, family) = match &segments[prev_idx] {
-                    // TODO - this needs to handle InlineLinks
                     LayoutInline::Text {
                         text: _,
                         weight,
                         style,
                         family,
                     } => (weight, style, family),
+                    LayoutInline::InlineLink { link_text, url, title } => {
+                        todo!()
+                    }
                     _ => unreachable!("Non-text segment shouldn't have a Range"),
                 };
 
@@ -266,6 +277,7 @@ fn process_run(
                 current_text.clear();
             }
         }
+        
         let ch = &run.text[glyph.start..glyph.end];
         current_text.push_str(ch);
         current_segment_idx = Some(segment_idx);

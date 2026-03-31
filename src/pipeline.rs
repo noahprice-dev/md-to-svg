@@ -1,17 +1,15 @@
 use std::{
-    fs::{self, File},
-    io::{BufWriter, ErrorKind, Write},
-    path::Path,
+    collections::HashMap, fs::{self, File}, io::{BufWriter, ErrorKind, Write}, path::Path
 };
 
 use cosmic_text::FontSystem;
-use markdown::ParseOptions;
+use markdown::{ParseOptions, mdast::Definition};
 
 use crate::{
     MdToSvgError,
     config::SvgConfig,
     layout::{LayoutItem, process_layouts},
-    parser::node_to_styled_block,
+    parser::node_to_styled_block, styles::StyledBlock,
 };
 
 pub fn process_md_to_svg(
@@ -37,22 +35,32 @@ pub fn process_md_to_svg(
     // * Note - per the `markdown` documentation, this cannot fail using standard parse options.
     // * It should only fail if JSX/MDX is enabled, AND that parsing fails.
     let root = markdown::to_mdast(&md_text, &ParseOptions::default())?;
+    println!("Root: {:#?}", root);
+    
+    let styled_blocks: Vec<crate::styles::StyledBlock> = node_to_styled_block(&root, 0);
+    
+    let definitions: HashMap<String, Definition> = styled_blocks
+    .iter()
+    .filter_map(|block| match block {
+        StyledBlock::Definition(def) => Some((def.identifier.clone(), def.clone())),
+        _ => None,
+    })
+    .collect();
 
-    let styled_lines: Vec<crate::styles::StyledBlock> = node_to_styled_block(&root, 0);
-
-    let layout_lines = styled_lines
+    
+    let layout_items = styled_blocks
         .into_iter()
-        .map(|block| match block {
+        .filter_map(|block| match block {
             // Handle non-textual structural items..
-            crate::styles::StyledBlock::ThematicBreak => LayoutItem::ThematicBreak {
+            StyledBlock::Definition(_) => None,
+            StyledBlock::ThematicBreak => Some(LayoutItem::ThematicBreak {
                 left: cfg.canvas_opts.padding.left,
                 right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,
-            },
-            _ => LayoutItem::Block(block.into_layout_block(cfg, font_system)),
-        })
-        .collect::<Vec<LayoutItem>>();
+            }),
+            _ => Some(LayoutItem::Block(block.into_layout_block(cfg, font_system, &definitions)))})
+            .collect();
 
-    let text_tags = process_layouts(layout_lines, cfg);
+    let text_tags = process_layouts(layout_items, cfg);
 
     let svg_file = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>

@@ -4,8 +4,9 @@ use md_to_svg::styles::{StyledBlock, StyledInline};
 
 use crate::common::{create_default_test_font_system, normalize_svg_for_comparison};
 
-pub mod common;
+mod common;
 
+// TODO - these tests belong in `Layout` now. This should really reflect the `pipeline` level tests I think.
 #[test]
 fn process_layouts_creates_svg() {
     let mut font_system = create_default_test_font_system();
@@ -17,7 +18,7 @@ fn process_layouts_creates_svg() {
         segments: vec![StyledInline::Text(paragraph_text.clone())],
     };
 
-    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system, &common::empty_definitions()));
 
     let svg_lines = process_layouts(vec![layout_item], &cfg);
 
@@ -36,7 +37,7 @@ fn process_layout_line_long_soft_wrap_produces_multiple_lines() {
         segments: vec![StyledInline::Text(paragraph_text.clone())],
     };
 
-    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system, &common::empty_definitions()));
 
     let svg_lines = process_layouts(vec![layout_item], &cfg);
 
@@ -58,7 +59,7 @@ fn process_layout_line_long_hard_break_produces_multiple_lines() {
         ],
     };
 
-    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system, &common::empty_definitions()));
 
     let svg_lines = process_layouts(vec![layout_item], &cfg);
 
@@ -78,7 +79,7 @@ fn process_layouts_soft_wrap_preserves_text_content() {
         segments: vec![StyledInline::Text(expected.clone())],
     };
 
-    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system, &common::empty_definitions()));
 
     let svg_lines = process_layouts(vec![layout_item], &cfg);
 
@@ -110,7 +111,7 @@ fn process_layouts_hard_break_preserves_text_content() {
         ],
     };
 
-    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system));
+    let layout_item = LayoutItem::Block(styled_block.into_layout_block(&cfg, &mut font_system, &common::empty_definitions()));
 
     let svg_lines = process_layouts(vec![layout_item], &cfg);
 
@@ -131,7 +132,7 @@ fn process_layouts_handles_thematic_break() {
     let styled_block = StyledBlock::Paragraph { segments: vec![StyledInline::Text("Hello World".to_string())] };
     let layout_items = vec![
         LayoutItem::Block(
-            styled_block.into_layout_block(&cfg, &mut font_system)),
+            styled_block.into_layout_block(&cfg, &mut font_system, &common::empty_definitions())),
         LayoutItem::ThematicBreak {
                 left: cfg.canvas_opts.padding.left,
                 right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,

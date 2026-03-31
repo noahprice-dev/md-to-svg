@@ -1,4 +1,7 @@
+use std::collections::HashMap;
+
 use cosmic_text::{Attrs, Buffer, FamilyOwned, FontSystem, Metrics, Style, Weight};
+use markdown::mdast::Definition;
 
 use crate::{
     config::SvgConfig,
@@ -16,19 +19,27 @@ pub enum StyledInline {
     Emphasis(Vec<StyledInline>),
     Strong(Vec<StyledInline>),
     InlineCode(String),
-    Link {
+    InlineLink {
         text: Vec<StyledInline>,
         url: String,
         title: Option<String>,
     },
+    LinkReference {
+        text: Vec<StyledInline>,
+        identifier: String,
+    },
     HardBreak,
 }
+
 impl StyledInline {
     /// Parse an InlineStyle into a set of flat LayoutInlines.
     /// This function consumes the original StyledInline and the children of the original object.
-    pub fn into_layout_inline(self) -> Vec<LayoutInline> {
+    pub fn into_layout_inline(
+        self,
+        definitions: &HashMap<String, Definition>,
+    ) -> Vec<LayoutInline> {
         // StyledInline::Text(StyledSpan::new(text, ctx))
-        self.transform(StyleContext::default())
+        self.transform(StyleContext::default(), definitions)
     }
     // TODO this could be a doc-comment test
     /// These collections are flattened into a LayoutInline by parsing the style associated
@@ -38,12 +49,16 @@ impl StyledInline {
     /// provided during AST parsing.
     ///
     /// For example:
-    /// 
+    ///
     /// `<i><b>This text is Strong and Emphasized</i></b>`
-    /// 
+    ///
     /// Becomes
     /// `LayoutInline::Text{text: "This text is Strong and Emphasized", weight: Weight::Bold, style: Style::Italic, family, ...}`
-    fn transform(self, ctx: StyleContext) -> Vec<LayoutInline> {
+    fn transform(
+        self,
+        ctx: StyleContext,
+        definitions: &HashMap<String, Definition>,
+    ) -> Vec<LayoutInline> {
         match self {
             StyledInline::Text(span) => {
                 // Final/Leaf case
@@ -74,14 +89,14 @@ impl StyledInline {
                 };
                 styled_inlines
                     .into_iter()
-                    .flat_map(|child| child.transform(ctx))
+                    .flat_map(|child| child.transform(ctx, definitions))
                     .collect()
             }
             StyledInline::Strong(styled_inlines) => {
                 let ctx = StyleContext { bold: true, ..ctx };
                 styled_inlines
                     .into_iter()
-                    .flat_map(|child| child.transform(ctx))
+                    .flat_map(|child| child.transform(ctx, definitions))
                     .collect()
             }
             StyledInline::InlineCode(code) => {
@@ -98,18 +113,38 @@ impl StyledInline {
                 // Needs to recurse, but does not contain a Vec<StyledInline>. So we need to wrap it in a Text variant.
                 vec![StyledInline::Text(code)]
                     .into_iter()
-                    .flat_map(|child| child.transform(ctx))
+                    .flat_map(|child| child.transform(ctx, definitions))
                     .collect()
             }
-            StyledInline::Link { text, url, title } => {
+            StyledInline::InlineLink { text, url, title } => {
                 vec![LayoutInline::InlineLink {
                     link_text: text
                         .into_iter()
-                        .flat_map(|child| child.transform(ctx))
+                        .flat_map(|child| child.transform(ctx, definitions))
                         .collect(),
                     url,
                     title,
                 }]
+            }
+            StyledInline::LinkReference { text, identifier } => {
+                let link_text = text
+                    .into_iter()
+                    .flat_map(|child| child.transform(ctx, definitions))
+                    .collect();
+
+                if let Some(def) = definitions.get(&identifier) {
+                    vec![LayoutInline::InlineLink {
+                        link_text,
+                        url: def.url.clone(),
+                        title: def.title.clone(),
+                    }]
+                } else {
+                    eprintln!(
+                        "Failed to find valid definition for reference: {:?}. Shaping Link Text as is...",
+                        identifier
+                    );
+                    link_text
+                }
             }
             StyledInline::HardBreak => vec![LayoutInline::HardBreak],
         }
@@ -146,11 +181,17 @@ pub enum StyledBlock {
     Blockquote {
         text: String,
     },
+    Definition(Definition),
     ThematicBreak,
 }
 
 impl StyledBlock {
-    pub fn into_layout_block(self, cfg: &SvgConfig, font_system: &mut FontSystem) -> LayoutBlock {
+    pub fn into_layout_block(
+        self,
+        cfg: &SvgConfig,
+        font_system: &mut FontSystem,
+        definitions: &HashMap<String, Definition>,
+    ) -> LayoutBlock {
         match self {
             StyledBlock::Paragraph { segments } => {
                 let available_width = cfg.canvas_opts.width
@@ -158,7 +199,7 @@ impl StyledBlock {
 
                 let layout_lines: Vec<LayoutInline> = segments
                     .into_iter()
-                    .flat_map(|line| line.into_layout_inline())
+                    .flat_map(|line| line.into_layout_inline(definitions))
                     .collect();
 
                 let buffer = create_buffer(
@@ -189,7 +230,7 @@ impl StyledBlock {
 
                 let layout_lines: Vec<LayoutInline> = segments
                     .into_iter()
-                    .flat_map(|line| line.into_layout_inline())
+                    .flat_map(|line| line.into_layout_inline(definitions))
                     .collect();
 
                 let buffer = create_buffer(
@@ -226,7 +267,7 @@ impl StyledBlock {
 
                 let layout_lines: Vec<LayoutInline> = segments
                     .into_iter()
-                    .flat_map(|line| line.into_layout_inline())
+                    .flat_map(|line| line.into_layout_inline(definitions))
                     .collect();
 
                 let buffer = create_buffer(
@@ -265,7 +306,7 @@ impl StyledBlock {
 
                 let layout_lines: Vec<LayoutInline> = segments
                     .into_iter()
-                    .flat_map(|line| line.into_layout_inline())
+                    .flat_map(|line| line.into_layout_inline(definitions))
                     .collect();
 
                 let buffer = create_buffer(
@@ -288,20 +329,6 @@ impl StyledBlock {
             }
             StyledBlock::ThematicBreak => todo!(),
             _ => todo!(),
-        }
-    }
-
-    // TODO remove? This is just used for debugging and printing in-progress types..
-    pub fn get_type(&self) -> String {
-        match self {
-            StyledBlock::Header { .. } => String::from("Header"),
-            StyledBlock::BulletListItem { .. } => String::from("Bullet List Item"),
-            StyledBlock::NumberedListItem { .. } => String::from("Numbered List Item"),
-            StyledBlock::Paragraph { .. } => String::from("Paragraph"),
-            StyledBlock::Blockquote { .. } => String::from("Blockquote"),
-            // StyledBlock::Link { .. } => String::from("Link"),
-            // StyledBlock::Image { .. } => String::from("Image"),
-            StyledBlock::ThematicBreak => String::from("Horizontal Rule"),
         }
     }
 }
@@ -386,10 +413,9 @@ fn create_buffer(
 
 #[cfg(test)]
 mod tests {
-    use cosmic_text::{
-        FamilyOwned, FontSystem, Style, Weight, fontdb::Database,
-    };
-    use std::{path::Path,};
+    use cosmic_text::{FamilyOwned, FontSystem, Style, Weight, fontdb::Database};
+    use markdown::mdast::Definition;
+    use std::{collections::HashMap, path::Path};
 
     use crate::{
         config::SvgConfig,
@@ -397,6 +423,13 @@ mod tests {
         styles::{StyledBlock, StyledInline, create_buffer},
     };
 
+    // ? Do we need to share this as a src level test dependency?
+    /// In the case we are testing non-link inlines, we don't need a real definition map.
+    /// Since HashMap will not allocate until it is inserted, we can satisfy the arguments
+    /// Without actually allocating any memory.
+    fn empty_definitions() -> HashMap<String, Definition> {
+        HashMap::new()
+    }
     /// Create a simple FontSystem with default Sans-Serif font derived from tests/fonts.
     fn create_default_test_font_system() -> FontSystem {
         // Create a default, empty FontDB
@@ -425,7 +458,7 @@ mod tests {
         let styled_segments = vec![StyledInline::Text(paragraph_text.clone())];
         let layout_segments: Vec<LayoutInline> = styled_segments
             .iter()
-            .flat_map(|seg| seg.clone().into_layout_inline())
+            .flat_map(|seg| seg.clone().into_layout_inline(&empty_definitions()))
             .collect();
 
         // Create a basic StyledLine
@@ -434,7 +467,7 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system);
+        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
         let expected: LayoutBlock = LayoutBlock {
             buffer: create_buffer(
                 &vec![LayoutInline::Text {
@@ -468,7 +501,6 @@ mod tests {
     #[test]
     fn into_layout_line_applies_styling() {
         // * Arrange
-
         let ital_text = String::from("Hello ");
         let norm_text = String::from("World");
 
@@ -480,7 +512,7 @@ mod tests {
         // * Act
         let layout_inlines: Vec<LayoutInline> = styled_segments
             .into_iter()
-            .flat_map(|line| line.into_layout_inline())
+            .flat_map(|line| line.into_layout_inline(&empty_definitions()))
             .collect();
         // * Assert
 
@@ -507,7 +539,6 @@ mod tests {
     #[test]
     fn into_layout_line_applies_nested_styling() {
         // * Arrange
-
         let ital_text = String::from("Hello ");
         let bold_text = String::from("World");
 
@@ -522,7 +553,7 @@ mod tests {
         // * Act
         let layout_inlines: Vec<LayoutInline> = styled_segments
             .into_iter()
-            .flat_map(|line| line.into_layout_inline())
+            .flat_map(|line| line.into_layout_inline(&empty_definitions()))
             .collect();
         // * Assert
 
@@ -562,7 +593,7 @@ mod tests {
         // * Act
         let layout_inlines: Vec<LayoutInline> = styled_segments
             .into_iter()
-            .flat_map(|line| line.into_layout_inline())
+            .flat_map(|line| line.into_layout_inline(&empty_definitions()))
             .collect();
 
         // * Assert
@@ -593,14 +624,14 @@ mod tests {
         let cfg = SvgConfig::default();
 
         let paragraph_text = "This is some paragraph text.".to_string();
-
+        
         let styled_segments = vec![
             StyledInline::Text(paragraph_text.clone()),
             StyledInline::HardBreak,
         ];
         let layout_segments: Vec<LayoutInline> = styled_segments
             .iter()
-            .flat_map(|seg| seg.clone().into_layout_inline())
+            .flat_map(|seg| seg.clone().into_layout_inline(&empty_definitions()))
             .collect();
 
         // Create a basic StyledLine
@@ -609,7 +640,7 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system);
+        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
         let expected: LayoutBlock = LayoutBlock {
             buffer: create_buffer(
                 &vec![
@@ -643,7 +674,7 @@ mod tests {
         // * Arrange
         let mut font_system = create_default_test_font_system();
         let cfg = SvgConfig::default();
-
+        
         let header_text = "# Header".to_string();
 
         let segments = vec![StyledInline::Text(header_text.clone())];
@@ -654,7 +685,7 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_paragraph.into_layout_block(&cfg, &mut font_system);
+        let layout_result = styled_block_paragraph.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
         // * Assert
         assert_eq!(
@@ -680,7 +711,7 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system);
+        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
         // * Assert
         assert_eq!(layout_result.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
@@ -703,7 +734,7 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system);
+        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
         // * Assert
         assert_eq!(
@@ -730,7 +761,7 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system);
+        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
         // * Assert
         assert_eq!(layout_result.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
@@ -754,7 +785,7 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system);
+        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
         // * Assert
 
