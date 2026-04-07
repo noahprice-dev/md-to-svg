@@ -388,7 +388,7 @@ fn create_buffer(
         LayoutInline::HardBreak => {
             vec![("\n", Attrs::new())]
         }
-        // TODO
+        // TODO - needs to recurse and hadnle it's `link_text` guys.
         LayoutInline::InlineLink {
             link_text: _,
             url: _,

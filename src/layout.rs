@@ -101,6 +101,78 @@ pub enum TspanDefinition {
     },
 }
 
+impl TspanDefinition {
+    pub fn to_svg_string(self) -> String {
+        match self {
+            // todo family can be handled at the text level and only inserted if the tspan is different.
+            // todo later config probably.
+            TspanDefinition::Text {
+                text,
+                font_size,
+                weight,
+                style,
+                family,
+            } => {
+                // Create the base raw_string value
+                let mut tspan = r#"<tspan"#.to_string();
+
+                if weight == Weight::BOLD {
+                    tspan.push_str(r#" font-weight="bold""#);
+                };
+
+                match style {
+                    Style::Italic => {
+                        tspan.push_str(r#" font-style="italic""#);
+                    }
+                    Style::Oblique => {
+                        tspan.push_str(r#" font-style="oblique""#);
+                    }
+                    Style::Normal => {}
+                };
+                tspan.push_str(&format!(r#" font-size="{}px""#, font_size));
+
+                tspan.push_str(&format!(r#">{}</tspan>"#, html_escape(&text)));
+
+                match family {
+                    FamilyOwned::Name(smol_str) => {
+                        tspan.push_str(&format!(r#"font-family="{}, sans-serif""#, smol_str));
+                    }
+                    FamilyOwned::SansSerif => {
+                        tspan.push_str(r#"font-family="sans-serif""#);
+                    }
+                    FamilyOwned::Serif => {
+                        tspan.push_str(r#"font-family="serif""#);
+                    }
+                    FamilyOwned::Cursive => {
+                        tspan.push_str(r#"font-family="cursive""#);
+                    }
+                    FamilyOwned::Fantasy => {
+                        tspan.push_str(r#"font-family="fantasy""#);
+                    }
+                    FamilyOwned::Monospace => {
+                        tspan.push_str(r#"font-family="monospace""#);
+                    }
+                };
+
+                tspan
+            }
+            TspanDefinition::InlineLink { text, url, title } => {
+                let child_text = text
+                    .into_iter()
+                    .map(|ch| ch.to_svg_string())
+                    .collect::<String>();
+                let tspan = format!(
+                    r#"<a href="{}"><title>{}</title>{}</a>"#,
+                    url,
+                    title.unwrap_or_default(),
+                    child_text
+                );
+                tspan
+            }
+        }
+    }
+}
+
 #[derive(Default)]
 struct RunState {
     current_text: String,
@@ -115,7 +187,7 @@ impl RunState {
     /// Move forward in the text state.
     /// Compares the current state versus the inccoming state, optionally returning a TSpanDefinition if a segment change is detected.
     /// In the case of a child segment changing within a segment, format and store the child range to be returned with other children on segment change.
-    /// 
+    ///
     fn advance(
         &mut self,
         new_char: &str,
@@ -267,7 +339,6 @@ impl RunState {
 
         result
     }
-    
 }
 
 pub fn process_layouts(layouts: Vec<LayoutItem>, cfg: &SvgConfig) -> Vec<String> {
@@ -353,7 +424,7 @@ fn process_layout_line(layout: &LayoutBlock, y_cursor: f32, cfg: &SvgConfig) -> 
                 0
             };
 
-        svg_elements.push(tspans_to_svg(&tspans, current_x, run.line_y + y_cursor));
+        svg_elements.push(tspans_to_svg(tspans, current_x, run.line_y + y_cursor));
     }
 
     (svg_elements, cumulative_y)
@@ -374,16 +445,13 @@ fn process_run(
     // ? Therefore we need to process & emit it separately.
     if prefix_len > 0 {
         let mut prefix_text = String::new();
-
-        // * Collect all glyphs that are part of the prefix
         for glyph in run.glyphs.iter().take_while(|g| g.start < prefix_len) {
             prefix_text.push_str(&run.text[glyph.start..glyph.end]);
         }
-
         if !prefix_text.is_empty() {
             tspans.push(TspanDefinition::Text {
                 text: prefix_text,
-                font_size: font_size,
+                font_size,
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
@@ -391,11 +459,9 @@ fn process_run(
         }
     }
 
-    let mut current_text: String = String::new(); // * Create a string buffer that holds all characters in a given segment range.
-    let mut current_segment_idx: Option<usize> = None;
+    let mut run_state = RunState::default();
 
     // * Start investigating all 'glyphs' - or Unicode Codepoints.
-    // ? It is important to note these are not necessarily entire characters or grapheme clusters.
     for glyph in run.glyphs.iter() {
         if glyph.start < prefix_len {
             continue; // Skip prefix glyphs
@@ -405,128 +471,52 @@ fn process_run(
         let adjusted_byte_pos = (glyph.start - prefix_len) + run_byte_offset;
 
         // Find which segment this glyph belongs to.
-        let segment_range = segment_ranges.iter().find(|range| {
-            adjusted_byte_pos >= range.start_byte && adjusted_byte_pos < range.end_byte
-        });
-
-        // If we don't get a segment, we are on a Line Break.
-        let segment_idx = match segment_range {
-            Some(seg) => seg.segment_idx,
-            None => {
-                //println!("Current text: {}", current_text);
-                unreachable!(
+        // ? Same as before, but I unwrap it here instead of taking two steps.
+        let segment_style_idx = segment_ranges
+            .iter()
+            .find(|range| {
+                adjusted_byte_pos >= range.start_byte && adjusted_byte_pos < range.end_byte
+            })
+            .expect(
+                format!(
                     "Glyph at index {} has no matching segment range - \
                     build_segment_ranges produced incomplete coverage",
                     adjusted_byte_pos
-                );
-            }
-        };
+                )
+                .as_str(),
+            );
 
-        // TODO Can we collapse this into a single function to return TspanDefinition?
-        // Check if we have moved into a different segment.
-        if let Some(prev_idx) = current_segment_idx {
-            if prev_idx != segment_idx {
-                // Emit the accumulated text as a TSpan with styling from the previous segment.
-                let (weight, style, family) = match &segments[prev_idx] {
-                    LayoutInline::Text {
-                        text: _,
-                        weight,
-                        style,
-                        family,
-                    } => (weight, style, family),
-                    LayoutInline::InlineLink { link_text, url, title } => {
-                        todo!()
-                    }
-                    _ => unreachable!("Non-text segment shouldn't have a Range"),
-                };
-
-                tspans.push(TspanDefinition {
-                    text: current_text.clone(),
-                    font_size: font_size,
-                    weight: *weight,
-                    style: *style,
-                    family: family.clone(),
-                });
-
-                // Reset text buffer and update our X to move inline with all previous characters.
-                current_text.clear();
-            }
-        }
-        
-        let ch = &run.text[glyph.start..glyph.end];
-        current_text.push_str(ch);
-        current_segment_idx = Some(segment_idx);
+        // ? Each glyph adds to the run state. If accumulating that glyph would cause an emission,
+        // ? We add it to the function scope `tspans` vector for final return, and continue on.
+        run_state
+            .advance(
+                &run.text[glyph.start..glyph.end],
+                segment_style_idx.segment_idx,
+                segment_style_idx.child_idx,
+                segments,
+                font_size,
+            )
+            .map(|tsp| tspans.push(tsp));
     }
 
     // At the end of the run, if we have any text remaining in our buffer, crunch it.
-    if !current_text.is_empty() {
-        if let Some(seg_idx) = current_segment_idx {
-            // Emit the accumulated text as a TSpan with styling from the previous segment.
-            let (weight, style, family) = match &segments[seg_idx] {
-                // TODO - this needs to handle InlineLinks
-                LayoutInline::Text {
-                    text: _,
-                    weight,
-                    style,
-                    family,
-                } => (weight, style, family),
-                _ => unreachable!("Non-text segment shouldn't have a Range"),
-            };
-            tspans.push(TspanDefinition {
-                text: current_text.clone(),
-                font_size: font_size,
-                weight: *weight,
-                style: *style,
-                family: family.clone(),
-            });
-        }
-    }
+    run_state
+        .flush(segments, font_size)
+        .map(|tsp| tspans.push(tsp));
 
     tspans
 }
 
 /// Convert a `Tspan` into a raw SVG string  by a <text> tag.
-fn tspans_to_svg(tspans: &[TspanDefinition], x: f32, y: f32) -> String {
+fn tspans_to_svg(tspans: Vec<TspanDefinition>, x: f32, y: f32) -> String {
     let tspan_strings: Vec<String> = tspans
-        .iter()
+        .into_iter()
         .map(|ts| {
-            let weight_attr = if ts.weight == Weight::BOLD {
-                r#"font-weight="bold""#
-            } else {
-                ""
-            };
-
-            let style_attr = match ts.style {
-                Style::Italic => r#"font-style="italic""#,
-                Style::Oblique => r#"font-style="oblique""#,
-                Style::Normal => "",
-            };
-
-            let font_family = match &ts.family {
-                FamilyOwned::Name(smol_str) => {
-                    format!(r#"font-family="{}, sans-serif""#, smol_str)
-                }
-                FamilyOwned::SansSerif => r#"font-family="sans-serif""#.to_string(),
-                FamilyOwned::Serif => r#"font-family="serif""#.to_string(),
-                FamilyOwned::Cursive => r#"font-family="cursive""#.to_string(),
-                FamilyOwned::Fantasy => r#"font-family="fantasy""#.to_string(),
-                FamilyOwned::Monospace => r#"font-family="monospace""#.to_string(),
-            };
-
-            let font_size = format!(r#"font-size="{}px""#, ts.font_size);
-            // Return a formatted SVG String.
-            format!(
-                r#"<tspan {} {} {} {}>{}</tspan>"#, // TODO collapse whitespace properly for unused attrs
-                font_size,
-                weight_attr,
-                style_attr,
-                font_family,
-                html_escape(&ts.text)
-            )
-        })
+            ts.to_svg_string()
+            })
         .collect();
     format!(
-        r#"<text x="{}" y="{}" font-family="sans-serif">{}</text>"#,
+        r#"<text x="{}" y="{}">{}</text>"#,
         x,
         y,
         tspan_strings.join("")
@@ -554,6 +544,7 @@ fn build_styled_inline_ranges(segments: &Vec<LayoutInline>) -> Vec<StyledInlineR
                     segment_idx: seg_idx,
                     start_byte: current_pos,
                     end_byte: current_pos + seg_len,
+                    child_idx: None, // Text cannot have children.
                 });
 
                 current_pos += seg_len;
@@ -565,13 +556,18 @@ fn build_styled_inline_ranges(segments: &Vec<LayoutInline>) -> Vec<StyledInlineR
             }
 
             LayoutInline::InlineLink { link_text, .. } => {
-                let seg_len = link_text.len();
+                let seg_len = segment.raw_text().len();
 
-                ranges.push(StyledInlineRange {
-                    segment_idx: seg_idx,
-                    start_byte: current_pos,
-                    end_byte: current_pos + seg_len,
-                });
+                for (i, text) in link_text.iter().enumerate() {
+                    let child_len = text.raw_text().len();
+
+                    ranges.push(StyledInlineRange {
+                        segment_idx: seg_idx,
+                        start_byte: current_pos,
+                        end_byte: current_pos + child_len,
+                        child_idx: Some(i),
+                    });
+                }
 
                 current_pos += seg_len;
             }
@@ -602,7 +598,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-weight="bold""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TspanDefinition {
+        let tspan = TspanDefinition::Text {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::BOLD,
@@ -611,7 +607,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -625,7 +621,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-weight="bold""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TspanDefinition {
+        let tspan = TspanDefinition::Text {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -634,7 +630,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -648,7 +644,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-style="italic""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TspanDefinition {
+        let tspan = TspanDefinition::Text {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -657,7 +653,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -671,7 +667,7 @@ mod tests {
         let input_text = "Hello World".to_string();
         let attr = r#"font-style="italic""#.to_string();
         // Form a TSpan with some default X/Y.
-        let tspan = TspanDefinition {
+        let tspan = TspanDefinition::Text {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -680,7 +676,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -694,7 +690,7 @@ mod tests {
         let input_text = "Hello World".to_string();
 
         // Form a TSpan with some defaults
-        let tspan = TspanDefinition {
+        let tspan = TspanDefinition::Text {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -704,7 +700,7 @@ mod tests {
 
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -716,7 +712,7 @@ mod tests {
         let input_text = r#"<&>""#.to_string();
         let compare_text = "&lt;&amp;&gt;&quot;";
 
-        let tspan = TspanDefinition {
+        let tspan = TspanDefinition::Text {
             text: input_text.clone(),
             font_size: 16.0,
             weight: Weight::NORMAL,
@@ -724,7 +720,7 @@ mod tests {
             family: FamilyOwned::SansSerif,
         };
 
-        let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
         assert!(svg_string.contains(&compare_text));
     }
 
