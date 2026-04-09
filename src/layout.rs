@@ -3,7 +3,7 @@ use cosmic_text::{Buffer, FamilyOwned, LayoutRun, Style, Weight};
 
 use crate::config::SvgConfig;
 
-// This should use a From impl that takes in a StyledSpan and adjusts accordingly?
+
 /// A range of text with a specific style associated with `cosmic_text` style types.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LayoutInline {
@@ -85,7 +85,7 @@ pub struct StyledInlineRange {
 
 /// Complete definition of a Text Span SVG element.
 // TODO - introduce separate type for nested variants to ensure we can only have valid variants by type.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TspanDefinition {
     Text {
         text: String,
@@ -105,7 +105,6 @@ impl TspanDefinition {
     pub fn to_svg_string(self) -> String {
         match self {
             // todo family can be handled at the text level and only inserted if the tspan is different.
-            // todo later config probably.
             TspanDefinition::Text {
                 text,
                 font_size,
@@ -131,28 +130,29 @@ impl TspanDefinition {
                 };
                 tspan.push_str(&format!(r#" font-size="{}px""#, font_size));
 
-                tspan.push_str(&format!(r#">{}</tspan>"#, html_escape(&text)));
+                
 
                 match family {
                     FamilyOwned::Name(smol_str) => {
-                        tspan.push_str(&format!(r#"font-family="{}, sans-serif""#, smol_str));
+                        tspan.push_str(&format!(r#" font-family="{}, sans-serif""#, smol_str));
                     }
                     FamilyOwned::SansSerif => {
-                        tspan.push_str(r#"font-family="sans-serif""#);
+                        tspan.push_str(r#" font-family="sans-serif""#);
                     }
                     FamilyOwned::Serif => {
-                        tspan.push_str(r#"font-family="serif""#);
+                        tspan.push_str(r#" font-family="serif""#);
                     }
                     FamilyOwned::Cursive => {
-                        tspan.push_str(r#"font-family="cursive""#);
+                        tspan.push_str(r#" font-family="cursive""#);
                     }
                     FamilyOwned::Fantasy => {
-                        tspan.push_str(r#"font-family="fantasy""#);
+                        tspan.push_str(r#" font-family="fantasy""#);
                     }
                     FamilyOwned::Monospace => {
-                        tspan.push_str(r#"font-family="monospace""#);
+                        tspan.push_str(r#" font-family="monospace""#);
                     }
                 };
+                tspan.push_str(&format!(r#">{}</tspan>"#, html_escape(&text)));
 
                 tspan
             }
@@ -173,7 +173,7 @@ impl TspanDefinition {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct RunState {
     current_text: String,
     current_segment_idx: Option<usize>,
@@ -199,10 +199,9 @@ impl RunState {
         // todo rename
         let result = match self.current_segment_idx {
             // First glyph in the layout. Initialize State
-            None => None
-            ,
+            None => None,
             // * Same segment
-            Some(idx) if idx == new_segment_idx => {
+            Some(seg_idx) if seg_idx == new_segment_idx => {
                 // ? If we are not in a Link, then our current and new child will both be None.
                 // ? If we are in a link, one of these must be Some.
                 // * Same Segment, new child. We have a link with different styles of text within.
@@ -213,7 +212,7 @@ impl RunState {
                         // Get styling of current child:
                         // ? We know that only InlineLink segments will have a child, however our type system doesn't yet clarify that,
                         // ? so we need to do some weird pattern matching to fit this.
-                        match &segments[idx] {
+                        match &segments[seg_idx] {
                             LayoutInline::InlineLink { link_text, .. } => {
                                 if let LayoutInline::Text {
                                     text: _,
@@ -221,7 +220,7 @@ impl RunState {
                                     style,
                                     family,
                                 } = &link_text[self.current_child_idx.expect(
-                                    "InlineLink variants off LayoutInline must be of type Text.",
+                                    "InlineLink.link_text must be of type Vec<LayoutInline::Text>.",
                                 )] {
                                     // * Update link spans for this segment
                                     self.link_tspans.push(TspanDefinition::Text {
@@ -235,7 +234,7 @@ impl RunState {
                                 // ? Partial flush. Reset our current text as this is not done unconditionally.
                                 self.current_text.clear();
 
-                                return None
+                                None
                             }
                             // ? Unreachable, in theory - type system needs to back this.
                             _ => unreachable!(
@@ -480,8 +479,8 @@ fn process_run(
             .expect(
                 format!(
                     "Glyph at index {} has no matching segment range - \
-                    build_segment_ranges produced incomplete coverage",
-                    adjusted_byte_pos
+                    build_segment_ranges produced incomplete coverage. Accumulated text: {:#?}",
+                    adjusted_byte_pos, run_state.current_text
                 )
                 .as_str(),
             );
@@ -556,7 +555,7 @@ fn build_styled_inline_ranges(segments: &Vec<LayoutInline>) -> Vec<StyledInlineR
             }
 
             LayoutInline::InlineLink { link_text, .. } => {
-                let seg_len = segment.raw_text().len();
+                
 
                 for (i, text) in link_text.iter().enumerate() {
                     let child_len = text.raw_text().len();
@@ -567,9 +566,10 @@ fn build_styled_inline_ranges(segments: &Vec<LayoutInline>) -> Vec<StyledInlineR
                         end_byte: current_pos + child_len,
                         child_idx: Some(i),
                     });
+                current_pos += child_len;
                 }
 
-                current_pos += seg_len;
+                
             }
         }
     }

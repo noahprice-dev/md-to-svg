@@ -388,12 +388,29 @@ fn create_buffer(
         LayoutInline::HardBreak => {
             vec![("\n", Attrs::new())]
         }
-        // TODO - needs to recurse and hadnle it's `link_text` guys.
+
         LayoutInline::InlineLink {
-            link_text: _,
+            link_text,
             url: _,
             title: _,
-        } => todo!(),
+        } => link_text
+            .iter()
+            .map(|txt: &LayoutInline| match txt {
+                LayoutInline::Text {
+                    text,
+                    weight,
+                    style,
+                    family,
+                } => (
+                    text.as_str(),
+                    Attrs::new()
+                        .weight(*weight)
+                        .style(*style)
+                        .family(family.as_family()),
+                ),
+                _ => unreachable!("InlineLink.link_text must be of type Vec<LayoutInline::Text>."),
+            })
+            .collect(),
     });
 
     // * Join both iterators. We only add the prefix spans if we have Some((&str, Attrs))
@@ -467,7 +484,8 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let layout_result =
+            styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
         let expected: LayoutBlock = LayoutBlock {
             buffer: create_buffer(
                 &vec![LayoutInline::Text {
@@ -624,7 +642,7 @@ mod tests {
         let cfg = SvgConfig::default();
 
         let paragraph_text = "This is some paragraph text.".to_string();
-        
+
         let styled_segments = vec![
             StyledInline::Text(paragraph_text.clone()),
             StyledInline::HardBreak,
@@ -640,7 +658,8 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let layout_result =
+            styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
         let expected: LayoutBlock = LayoutBlock {
             buffer: create_buffer(
                 &vec![
@@ -674,7 +693,7 @@ mod tests {
         // * Arrange
         let mut font_system = create_default_test_font_system();
         let cfg = SvgConfig::default();
-        
+
         let header_text = "# Header".to_string();
 
         let segments = vec![StyledInline::Text(header_text.clone())];
@@ -685,7 +704,8 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_paragraph.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let layout_result =
+            styled_block_paragraph.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
         // * Assert
         assert_eq!(
@@ -711,7 +731,11 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let layout_result = styled_block_bullet_item.into_layout_block(
+            &cfg,
+            &mut font_system,
+            &empty_definitions(),
+        );
 
         // * Assert
         assert_eq!(layout_result.prefix_len, 4); //? Character "•" is 3 bytes, followed by a single white-space = 4 bytes total.
@@ -734,7 +758,11 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_bullet_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let layout_result = styled_block_bullet_item.into_layout_block(
+            &cfg,
+            &mut font_system,
+            &empty_definitions(),
+        );
 
         // * Assert
         assert_eq!(
@@ -761,7 +789,11 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let layout_result = styled_block_numbered_item.into_layout_block(
+            &cfg,
+            &mut font_system,
+            &empty_definitions(),
+        );
 
         // * Assert
         assert_eq!(layout_result.prefix_len, 3); // ? prefixes for NumberedList are "#. " - 3 bytes: ASCII #, period, space.
@@ -785,7 +817,11 @@ mod tests {
         };
 
         // * Act
-        let layout_result = styled_block_numbered_item.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let layout_result = styled_block_numbered_item.into_layout_block(
+            &cfg,
+            &mut font_system,
+            &empty_definitions(),
+        );
 
         // * Assert
 
@@ -793,5 +829,100 @@ mod tests {
             layout_result.indent_offset,
             3.0 * (cfg.text_opts.bullet_indent_em * cfg.text_opts.font_size) // ? List Items are indented by 1 unit by default - so indent = indent + 1 * indent_size
         );
+    }
+
+    #[test]
+    fn into_layout_block_handles_single_word_inline_link() {
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let styled_block = StyledBlock::Paragraph {
+            segments: vec![StyledInline::InlineLink {
+                text: vec![StyledInline::Text("Hello".to_string())],
+                url: "test/url".to_string(),
+                title: None,
+            }],
+        };
+        
+        let layout_result =
+            styled_block.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+
+        assert_eq!(layout_result.segments.len(), 1);
+        assert_eq!(
+            layout_result.segments[0],
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: String::from("Hello"),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif
+                }],
+                url: String::from("test/url"),
+                title: None
+            }
+        );
+    }
+
+
+    #[test]
+    fn create_buffer_handles_single_word_inline_link() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let link_text = "Link".to_string();
+
+        let styled_segments = StyledInline::InlineLink {
+            text: vec![StyledInline::Text(link_text.clone())],
+            url: String::from("test/url"),
+            title: Some("Title".to_string()),
+        }
+        .into_layout_inline(&empty_definitions());
+
+        let result = create_buffer(
+            &styled_segments,
+            cfg.text_opts.font_size,
+            cfg.calculate_line_height_px(),
+            cfg.canvas_opts.width,
+            &mut font_system,
+            None,
+        );
+
+        assert_eq!(result.lines.len(), 1);
+        assert_eq!(result.lines[0].clone().into_text(), link_text)
+    }
+
+    #[test]
+    fn create_buffer_handles_multiple_word_inline_link() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let link_text = vec![
+            StyledInline::Text("Hello ".to_string()),
+            StyledInline::Text("World".to_string()),
+        ];
+
+        let styled_segments = StyledInline::InlineLink {
+            text: link_text,
+            url: String::from("test/url"),
+            title: Some("Title".to_string()),
+        }
+        .into_layout_inline(&empty_definitions()); // ? Not testing definitions right now.
+
+        let result = create_buffer(
+            &styled_segments,
+            cfg.text_opts.font_size,
+            cfg.calculate_line_height_px(),
+            cfg.canvas_opts.width,
+            &mut font_system,
+            None,
+        );
+
+        assert_eq!(result.lines.len(), 1);
+        assert_eq!(
+            result.lines[0].clone().into_text(),
+            String::from("Hello World")
+        )
     }
 }

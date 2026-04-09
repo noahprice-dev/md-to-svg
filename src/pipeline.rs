@@ -35,7 +35,7 @@ pub fn process_md_to_svg(
     // * Note - per the `markdown` documentation, this cannot fail using standard parse options.
     // * It should only fail if JSX/MDX is enabled, AND that parsing fails.
     let root = markdown::to_mdast(&md_text, &ParseOptions::default())?;
-    println!("Root: {:#?}", root);
+    
     
     let styled_blocks: Vec<crate::styles::StyledBlock> = node_to_styled_block(&root, 0);
     
