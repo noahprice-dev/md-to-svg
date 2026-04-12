@@ -60,6 +60,8 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
             // This is a leaf node. We can collapse into a new StyledBlock.
             vec![StyledInline::InlineCode(normalized)]
         }
+        // Inline Link:
+        // i.e. `[Example](www.example.com)`
         Node::Link(link) => {
             // ? link text can be styled
             let link_text = link
@@ -82,14 +84,17 @@ fn node_to_styled_inline(node: &Node) -> Vec<StyledInline> {
                 .iter()
                 .flat_map(|child| node_to_styled_inline(child))
                 .collect();
-            
+
             // ? We need to reconnect this to a Definition block at the upper layer when we move into a Layout.
-            // ? I dislike including the type Definition as a Node layer right now, 
+            // ? I dislike including the type Definition as a Node layer right now,
             // ? though perhaps it can be treated at the pipeline level similarly to how we handle StyledBlock::ThematicBreak.
             // ? We would need to process and store links and definitions separately from the Block type.
             // ? Tricky to tie them back, but certainly possible. I would like to avoid certain
             // ? side-effects like mutable objects outside of the scope - that feels nasty.
-            vec![StyledInline::LinkReference { text: link_text, identifier: link_ref.identifier.clone() }]
+            vec![StyledInline::LinkReference {
+                text: link_text,
+                identifier: link_ref.identifier.clone(),
+            }]
         }
         Node::Image(_img) => todo!(),
         Node::Break(_) => {
@@ -207,5 +212,139 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
                 segments: unknown_node_segments,
             }]
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use markdown::ParseOptions;
+
+    use crate::{
+        parser::node_to_styled_block,
+        styles::{StyledBlock, StyledInline},
+    };
+
+    #[test]
+    fn parse_inline_link_produces_styled_inline_inline_link() {
+        let text = "[Example](www.example.com)";
+
+        let root = markdown::to_mdast(text, &ParseOptions::default())
+            .expect("Should be able to parse &str as Markdown");
+
+        let result = node_to_styled_block(&root, 0);
+
+        assert_eq!(
+            result,
+            vec![StyledBlock::Paragraph {
+                segments: vec![StyledInline::InlineLink {
+                    text: vec![StyledInline::Text("Example".to_string())],
+                    url: "www.example.com".to_string(),
+                    title: None
+                }]
+            }]
+        )
+    }
+
+    #[test]
+    fn parse_inline_link_preserves_url_and_title() {
+        let text = r#"[Example](www.example.com "My Title")"#;
+
+        let root = markdown::to_mdast(text, &ParseOptions::default())
+            .expect("Should be able to parse &str as Markdown");
+
+        let result = node_to_styled_block(&root, 0);
+
+        assert_eq!(
+            result,
+            vec![StyledBlock::Paragraph {
+                segments: vec![StyledInline::InlineLink {
+                    text: vec![StyledInline::Text("Example".to_string())],
+                    url: "www.example.com".to_string(),
+                    title: Some("My Title".to_string())
+                }]
+            }]
+        )
+    }
+
+    #[test]
+    fn parse_inline_link_without_url_preserves_empty_url() {
+        let text = r#"[Example]()"#;
+
+        let root = markdown::to_mdast(text, &ParseOptions::default())
+            .expect("Should be able to parse &str as Markdown");
+
+        let result = node_to_styled_block(&root, 0);
+
+        assert_eq!(
+            result,
+            vec![StyledBlock::Paragraph {
+                segments: vec![StyledInline::InlineLink {
+                    text: vec![StyledInline::Text("Example".to_string())],
+                    url: "".to_string(),
+                    title: None,
+                }]
+            }]
+        )
+    }
+
+    #[test]
+    fn parse_inline_link_without_url_with_title_preserves_empty_url_maintains_title() {
+        let text = r#"[Example](<> "Title")"#;
+
+        let root = markdown::to_mdast(text, &ParseOptions::default())
+            .expect("Should be able to parse &str as Markdown");
+
+        let result = node_to_styled_block(&root, 0);
+
+        assert_eq!(
+            result,
+            vec![StyledBlock::Paragraph {
+                segments: vec![StyledInline::InlineLink {
+                    text: vec![StyledInline::Text("Example".to_string())],
+                    url: "".to_string(),
+                    title: Some("Title".to_string()),
+                }]
+            }]
+        )
+    }
+
+    #[test]
+    fn parse_inline_link_with_styled_text_preserves_child_structure() {
+        let text = r#"[*Example*](www.example.com)"#;
+
+        let root = markdown::to_mdast(text, &ParseOptions::default())
+            .expect("Should be able to parse &str as Markdown");
+
+        let result = node_to_styled_block(&root, 0);
+
+        assert_eq!(
+            result,
+            vec![StyledBlock::Paragraph {
+                segments: vec![StyledInline::InlineLink {
+                    text: vec![StyledInline::Emphasis(vec![StyledInline::Text(
+                        "Example".to_string()
+                    )])],
+                    url: "www.example.com".to_string(),
+                    title: None,
+                }]
+            }]
+        )
+    }
+    
+    #[test]
+    fn parse_reference_link_produces_styled_inline_link_reference(){
+        todo!()
+    }
+    #[test]
+    fn parse_empty_shortcut_reference_renders_as_plain_text(){
+        let text = r#"[foo][]"#;
+        
+        let root = markdown::to_mdast(text, &ParseOptions::default())
+            .expect("Should be able to parse &str as Markdown");
+
+        let result = node_to_styled_block(&root, 0);
+        
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], StyledBlock::Paragraph { segments: vec![StyledInline::Text("[foo][]".to_string())] });
     }
 }
