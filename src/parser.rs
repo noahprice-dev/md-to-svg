@@ -218,7 +218,7 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
 #[cfg(test)]
 mod tests {
     use markdown::ParseOptions;
-
+    use pretty_assertions::assert_eq;
     use crate::{
         parser::node_to_styled_block,
         styles::{StyledBlock, StyledInline},
@@ -330,21 +330,27 @@ mod tests {
             }]
         )
     }
+
+    // #[test]
+    // fn parse_reference_link_produces_styled_inline_link_reference() {
+    //     todo!()
+    // }
     
     #[test]
-    fn parse_reference_link_produces_styled_inline_link_reference(){
-        todo!()
-    }
-    #[test]
-    fn parse_empty_shortcut_reference_renders_as_plain_text(){
+    fn parse_empty_shortcut_reference_renders_as_plain_text() {
         let text = r#"[foo][]"#;
-        
+
         let root = markdown::to_mdast(text, &ParseOptions::default())
             .expect("Should be able to parse &str as Markdown");
 
         let result = node_to_styled_block(&root, 0);
-        
+
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0], StyledBlock::Paragraph { segments: vec![StyledInline::Text("[foo][]".to_string())] });
+        assert_eq!(
+            result[0],
+            StyledBlock::Paragraph {
+                segments: vec![StyledInline::Text("[foo][]".to_string())]
+            }
+        );
     }
 }

@@ -34,7 +34,7 @@ pub enum StyledInline {
 impl StyledInline {
     /// Parse an InlineStyle into a set of flat LayoutInlines.
     /// This function consumes the original StyledInline and the children of the original object.
-    pub fn into_layout_inline(
+    fn into_layout_inline(
         self,
         definitions: &HashMap<String, Definition>,
     ) -> Vec<LayoutInline> {
@@ -160,7 +160,7 @@ impl StyledInline {
 /// Provides styling directives for specific line level containers (Lists, Blockquote)
 /// As well as Block leaves such as Paragraph or Headers and non-text structural elements such as Thematic Break (Horizontal Rule)
 /// This is a container or abstract type that loosely wraps style data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum StyledBlock {
     Header {
         segments: Vec<StyledInline>,
@@ -430,15 +430,15 @@ fn create_buffer(
 
 #[cfg(test)]
 mod tests {
-    use cosmic_text::{FamilyOwned, FontSystem, Style, Weight, fontdb::Database};
-    use markdown::mdast::Definition;
-    use std::{collections::HashMap, path::Path};
-
     use crate::{
         config::SvgConfig,
         layout::{LayoutBlock, LayoutInline},
         styles::{StyledBlock, StyledInline, create_buffer},
     };
+    use cosmic_text::{FamilyOwned, FontSystem, Style, Weight, fontdb::Database};
+    use markdown::mdast::{self, Definition};
+    use pretty_assertions::assert_eq;
+    use std::{collections::HashMap, path::Path};
 
     // ? Do we need to share this as a src level test dependency?
     /// In the case we are testing non-link inlines, we don't need a real definition map.
@@ -464,57 +464,7 @@ mod tests {
         font_sys
     }
 
-    #[test]
-    fn into_layout_block_paragraph_transforms_to_layout_block() {
-        // * Arrange
-        let mut font_system = create_default_test_font_system();
-        let cfg = SvgConfig::default();
-
-        let paragraph_text = "This is some paragraph text.".to_string();
-
-        let styled_segments = vec![StyledInline::Text(paragraph_text.clone())];
-        let layout_segments: Vec<LayoutInline> = styled_segments
-            .iter()
-            .flat_map(|seg| seg.clone().into_layout_inline(&empty_definitions()))
-            .collect();
-
-        // Create a basic StyledLine
-        let styled_line_para = StyledBlock::Paragraph {
-            segments: styled_segments.clone(),
-        };
-
-        // * Act
-        let layout_result =
-            styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
-        let expected: LayoutBlock = LayoutBlock {
-            buffer: create_buffer(
-                &vec![LayoutInline::Text {
-                    text: paragraph_text.clone(),
-                    weight: Weight::NORMAL,
-                    style: Style::Normal,
-                    family: FamilyOwned::SansSerif,
-                }],
-                cfg.text_opts.font_size,
-                cfg.calculate_line_height_px(),
-                cfg.canvas_opts.width,
-                &mut font_system,
-                None,
-            ),
-            segments: layout_segments,
-            font_size: cfg.text_opts.font_size,
-            prefix_len: 0,
-            indent_offset: 0.0,
-            margin_top: cfg.calculate_paragraph_spacing_px(),
-            margin_bottom: cfg.calculate_paragraph_spacing_px(),
-        };
-        // * Assert
-        assert_eq!(layout_result.font_size, expected.font_size);
-        assert_eq!(layout_result.segments, expected.segments);
-        assert_eq!(layout_result.margin_top, expected.margin_top);
-        assert_eq!(layout_result.margin_bottom, expected.margin_bottom);
-        assert_eq!(layout_result.prefix_len, expected.prefix_len);
-        assert_eq!(layout_result.indent_offset, expected.indent_offset);
-    }
+    // * -- Layout Lines --
 
     #[test]
     fn into_layout_line_applies_styling() {
@@ -633,6 +583,59 @@ mod tests {
                 family: FamilyOwned::Monospace
             }
         );
+    }
+
+    // * -- Layout Blocks --
+    #[test]
+    fn into_layout_block_paragraph_transforms_to_layout_block() {
+        // * Arrange
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let paragraph_text = "This is some paragraph text.".to_string();
+
+        let styled_segments = vec![StyledInline::Text(paragraph_text.clone())];
+        let layout_segments: Vec<LayoutInline> = styled_segments
+            .iter()
+            .flat_map(|seg| seg.clone().into_layout_inline(&empty_definitions()))
+            .collect();
+
+        // Create a basic StyledLine
+        let styled_line_para = StyledBlock::Paragraph {
+            segments: styled_segments.clone(),
+        };
+
+        // * Act
+        let layout_result =
+            styled_line_para.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+        let expected: LayoutBlock = LayoutBlock {
+            buffer: create_buffer(
+                &vec![LayoutInline::Text {
+                    text: paragraph_text.clone(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                }],
+                cfg.text_opts.font_size,
+                cfg.calculate_line_height_px(),
+                cfg.canvas_opts.width,
+                &mut font_system,
+                None,
+            ),
+            segments: layout_segments,
+            font_size: cfg.text_opts.font_size,
+            prefix_len: 0,
+            indent_offset: 0.0,
+            margin_top: cfg.calculate_paragraph_spacing_px(),
+            margin_bottom: cfg.calculate_paragraph_spacing_px(),
+        };
+        // * Assert
+        assert_eq!(layout_result.font_size, expected.font_size);
+        assert_eq!(layout_result.segments, expected.segments);
+        assert_eq!(layout_result.margin_top, expected.margin_top);
+        assert_eq!(layout_result.margin_bottom, expected.margin_bottom);
+        assert_eq!(layout_result.prefix_len, expected.prefix_len);
+        assert_eq!(layout_result.indent_offset, expected.indent_offset);
     }
 
     #[test]
@@ -831,6 +834,7 @@ mod tests {
         );
     }
 
+    // * -- Links --
     #[test]
     fn into_layout_block_handles_single_word_inline_link() {
         let mut font_system = create_default_test_font_system();
@@ -843,7 +847,7 @@ mod tests {
                 title: None,
             }],
         };
-        
+
         let layout_result =
             styled_block.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
@@ -863,7 +867,248 @@ mod tests {
         );
     }
 
+    #[test]
+    fn into_layout_block_multi_link_sentence_produces_correct_children() {
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
 
+        let styled_block = StyledBlock::Paragraph {
+            segments: vec![
+                StyledInline::InlineLink {
+                    text: vec![StyledInline::Text("Hello ".to_string())],
+                    url: "test/url".to_string(),
+                    title: None,
+                },
+                StyledInline::InlineLink {
+                    text: vec![StyledInline::Text("World".to_string())],
+                    url: "another/url".to_string(),
+                    title: None,
+                },
+            ],
+        };
+
+        let layout_result =
+            styled_block.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+
+        assert_eq!(layout_result.segments.len(), 2);
+        assert_eq!(
+            layout_result.segments[0],
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: String::from("Hello "),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif
+                }],
+                url: String::from("test/url"),
+                title: None
+            }
+        );
+        assert_eq!(
+            layout_result.segments[1],
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: String::from("World"),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif
+                }],
+                url: String::from("another/url"),
+                title: None
+            }
+        );
+    }
+
+    #[test]
+    fn into_layout_block_link_with_italic_text_preserves_italic_style() {
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let styled_block = StyledBlock::Paragraph {
+            segments: vec![StyledInline::InlineLink {
+                text: vec![StyledInline::Emphasis(vec![StyledInline::Text(
+                    "Italic Text".to_string(),
+                )])],
+                url: "test/url".to_string(),
+                title: None,
+            }],
+        };
+
+        let layout_result =
+            styled_block.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+
+        assert_eq!(layout_result.segments.len(), 1);
+        assert_eq!(
+            layout_result.segments[0],
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: String::from("Italic Text"),
+                    weight: Weight::NORMAL,
+                    style: Style::Italic,
+                    family: FamilyOwned::SansSerif
+                }],
+                url: String::from("test/url"),
+                title: None
+            }
+        );
+    }
+
+    #[test]
+    fn into_layout_block_link_with_bold_text_preserves_bold_style() {
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let styled_block = StyledBlock::Paragraph {
+            segments: vec![StyledInline::InlineLink {
+                text: vec![StyledInline::Strong(vec![StyledInline::Text(
+                    "Bold Text".to_string(),
+                )])],
+                url: "test/url".to_string(),
+                title: None,
+            }],
+        };
+
+        let layout_result =
+            styled_block.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+
+        assert_eq!(layout_result.segments.len(), 1);
+        assert_eq!(
+            layout_result.segments[0],
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: String::from("Bold Text"),
+                    weight: Weight::BOLD,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif
+                }],
+                url: String::from("test/url"),
+                title: None
+            }
+        );
+    }
+
+    #[test]
+    fn into_layout_block_link_with_mixed_styles_preserves_all_styles() {
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        let styled_block = StyledBlock::Paragraph {
+            segments: vec![StyledInline::InlineLink {
+                text: vec![
+                    StyledInline::Emphasis(vec![StyledInline::Text("Italic Text".to_string())]),
+                    StyledInline::Text(" ".to_string()),
+                    StyledInline::Strong(vec![StyledInline::Text("Bold Text".to_string())]),
+                    StyledInline::Text(" ".to_string()),
+                    StyledInline::Strong(vec![StyledInline::Emphasis(vec![StyledInline::Text(
+                        "Bold & Italic Text".to_string(),
+                    )])]),
+                ],
+                url: "test/url".to_string(),
+                title: None,
+            }],
+        };
+
+        let layout_result =
+            styled_block.into_layout_block(&cfg, &mut font_system, &empty_definitions());
+
+        assert_eq!(layout_result.segments.len(), 1);
+        assert_eq!(
+            layout_result.segments[0],
+            LayoutInline::InlineLink {
+                link_text: vec![
+                    LayoutInline::Text {
+                        text: String::from("Italic Text "),
+                        weight: Weight::NORMAL,
+                        style: Style::Italic,
+                        family: FamilyOwned::SansSerif
+                    },
+                    LayoutInline::Text {
+                        text: String::from("Bold Text "),
+                        weight: Weight::BOLD,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif
+                    },
+                    LayoutInline::Text {
+                        text: String::from("Bold & Italic Text"),
+                        weight: Weight::BOLD,
+                        style: Style::Italic,
+                        family: FamilyOwned::SansSerif
+                    }
+                ],
+                url: String::from("test/url"),
+                title: None
+            }
+        );
+    }
+
+    #[test]
+    fn into_layout_block_reference_link_with_definition_produces_inline_link() {
+        let mut font_system = create_default_test_font_system();
+        let cfg = SvgConfig::default();
+
+        // `[Text][identifier]`
+        // `[identifier]: test/url`
+        // ? Note identifier matching is case-insensitive per CommonMark spec.
+        let styled_block = StyledBlock::Paragraph {
+            segments: vec![StyledInline::LinkReference {
+                text: vec![StyledInline::Text("Hello".to_string())],
+                identifier: "identifier".to_string(),
+            }],
+        };
+        let def = mdast::Definition {
+            position: None,
+            url: "test/url".to_string(),
+            title: None,
+            identifier: "identifier".to_string(),
+            label: None,
+        };
+
+        let definitions: HashMap<String, Definition> =
+            HashMap::from([("identifier".to_string(), def)]);
+
+        let layout_result = styled_block.into_layout_block(&cfg, &mut font_system, &definitions);
+
+        assert_eq!(layout_result.segments.len(), 1);
+        assert_eq!(
+            layout_result.segments[0],
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: String::from("Hello"),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif
+                }],
+                url: String::from("test/url"),
+                title: None
+            }
+        );
+    }
+
+    #[test]
+    fn into_layout_block_reference_link_with_unmatched_definition_renders_as_plain_text() {
+        // * Arrange
+        let styled_inline = StyledInline::LinkReference {
+            text: vec![StyledInline::Text("Example".to_string())],
+            identifier: "identifier".to_string(),
+        };
+
+        // * Act
+        let result = styled_inline.into_layout_inline(&empty_definitions());
+
+        // * Assert
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0],
+            LayoutInline::Text {
+                text: "Example".to_string(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif
+            }
+        )
+    }
+
+    // * -- Cosmic Buffer Creation --
     #[test]
     fn create_buffer_handles_single_word_inline_link() {
         // * Arrange
