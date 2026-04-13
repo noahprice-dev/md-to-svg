@@ -27,7 +27,7 @@ fn process_layouts_creates_svg() {
 }
 
 #[test]
-fn process_layout_line_long_soft_wrap_produces_multiple_lines() {
+fn process_layout_line_long_input_text_soft_wrap_produces_multiple_lines() {
     let mut font_system = create_default_test_font_system();
     let cfg = SvgConfig::default();
 

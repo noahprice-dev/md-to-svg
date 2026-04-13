@@ -1007,7 +1007,6 @@ mod tests {
                 title: None,
             }],
         };
-
         let layout_result =
             styled_block.into_layout_block(&cfg, &mut font_system, &empty_definitions());
 
@@ -1017,14 +1016,26 @@ mod tests {
             LayoutInline::InlineLink {
                 link_text: vec![
                     LayoutInline::Text {
-                        text: String::from("Italic Text "),
+                        text: String::from("Italic Text"),
                         weight: Weight::NORMAL,
                         style: Style::Italic,
                         family: FamilyOwned::SansSerif
                     },
                     LayoutInline::Text {
-                        text: String::from("Bold Text "),
+                        text: String::from(" "),
+                        weight: Weight::NORMAL,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif
+                    },
+                    LayoutInline::Text {
+                        text: String::from("Bold Text"),
                         weight: Weight::BOLD,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif
+                    },
+                    LayoutInline::Text {
+                        text: String::from(" "),
+                        weight: Weight::NORMAL,
                         style: Style::Normal,
                         family: FamilyOwned::SansSerif
                     },

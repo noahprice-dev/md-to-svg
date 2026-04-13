@@ -3,7 +3,6 @@ use cosmic_text::{Buffer, FamilyOwned, LayoutRun, Style, Weight};
 
 use crate::config::SvgConfig;
 
-
 /// A range of text with a specific style associated with `cosmic_text` style types.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LayoutInline {
@@ -75,7 +74,7 @@ impl LayoutItem {
 /// A range of glyph indices in the source text that carry a consistent style.
 ///
 // ? *This is used to map the result of Cosmic's shaping to the parsed styles, as this is lost during transformation.*
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct StyledInlineRange {
     segment_idx: usize,
     start_byte: usize,
@@ -85,7 +84,7 @@ pub struct StyledInlineRange {
 
 /// Complete definition of a Text Span SVG element.
 // TODO - introduce separate type for nested variants to ensure we can only have valid variants by type.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TspanDefinition {
     Text {
         text: String,
@@ -129,8 +128,6 @@ impl TspanDefinition {
                     Style::Normal => {}
                 };
                 tspan.push_str(&format!(r#" font-size="{}px""#, font_size));
-
-                
 
                 match family {
                     FamilyOwned::Name(smol_str) => {
@@ -206,7 +203,8 @@ impl RunState {
                 // ? If we are in a link, one of these must be Some.
                 // * Same Segment, new child. We have a link with different styles of text within.
                 // * Flush current child text to `link_tspans`
-                if self.current_child_idx != new_child_idx { // ? Do we flip this?
+                if self.current_child_idx != new_child_idx {
+                    // ? Do we flip this?
                     // ? Child boundary - flush text into self.link_tspans
                     if self.current_child_idx.is_some() {
                         // Get styling of current child:
@@ -251,9 +249,7 @@ impl RunState {
                 }
             }
             // * New Segment - emit prior segment
-            Some(_) => {
-                self.flush(segments, font_size)
-            }
+            Some(_) => self.flush(segments, font_size),
         };
         // Unconditional state updates.
         self.current_text.push_str(new_char);
@@ -508,12 +504,7 @@ fn process_run(
 
 /// Convert a `Tspan` into a raw SVG string  by a <text> tag.
 fn tspans_to_svg(tspans: Vec<TspanDefinition>, x: f32, y: f32) -> String {
-    let tspan_strings: Vec<String> = tspans
-        .into_iter()
-        .map(|ts| {
-            ts.to_svg_string()
-            })
-        .collect();
+    let tspan_strings: Vec<String> = tspans.into_iter().map(|ts| ts.to_svg_string()).collect();
     format!(
         r#"<text x="{}" y="{}">{}</text>"#,
         x,
@@ -538,10 +529,16 @@ fn build_styled_inline_ranges(segments: &Vec<LayoutInline>) -> Vec<StyledInlineR
         match segment {
             LayoutInline::Text { text, .. } => {
                 let seg_len = text.len();
-
+                // ? Rust Ranges are inclusive below and exclusive above
+                // ? e.g.
+                // let arr = [0, 1,   2, 3, 4]; arr[1..3]
+                //          start^ end^
+                // ? Don't consider '0' basing here. "hello " has 6 glyphs. Therefore, the start index is 0, and the last index is 6.
+                // ? This means glyphs 0,1,2,3,4,5 are included.
                 ranges.push(StyledInlineRange {
                     segment_idx: seg_idx,
                     start_byte: current_pos,
+
                     end_byte: current_pos + seg_len,
                     child_idx: None, // Text cannot have children.
                 });
@@ -555,8 +552,6 @@ fn build_styled_inline_ranges(segments: &Vec<LayoutInline>) -> Vec<StyledInlineR
             }
 
             LayoutInline::InlineLink { link_text, .. } => {
-                
-
                 for (i, text) in link_text.iter().enumerate() {
                     let child_len = text.raw_text().len();
 
@@ -566,10 +561,8 @@ fn build_styled_inline_ranges(segments: &Vec<LayoutInline>) -> Vec<StyledInlineR
                         end_byte: current_pos + child_len,
                         child_idx: Some(i),
                     });
-                current_pos += child_len;
+                    current_pos += child_len;
                 }
-
-                
             }
         }
     }
@@ -587,8 +580,15 @@ fn html_escape(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::layout::{LayoutInline, TspanDefinition, build_styled_inline_ranges, tspans_to_svg};
+    use crate::{
+        config::SvgConfig,
+        layout::{
+            LayoutInline, RunState, StyledInlineRange, TspanDefinition, build_styled_inline_ranges,
+            tspans_to_svg,
+        },
+    };
     use cosmic_text::{FamilyOwned, Style, Weight};
+    use pretty_assertions::assert_eq;
 
     // * --- tspan_to_svg ---
     #[test]
@@ -607,7 +607,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec![tspan], 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -630,7 +630,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec![tspan], 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -653,7 +653,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec![tspan], 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -676,7 +676,7 @@ mod tests {
         };
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec![tspan], 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -700,7 +700,7 @@ mod tests {
 
         // * Act
         // call `tspans_to_svg` with the created TSpan, X, Y
-        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec![tspan], 0.0, 16.0);
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -720,7 +720,7 @@ mod tests {
             family: FamilyOwned::SansSerif,
         };
 
-        let svg_string = tspans_to_svg(vec!(tspan), 0.0, 16.0);
+        let svg_string = tspans_to_svg(vec![tspan], 0.0, 16.0);
         assert!(svg_string.contains(&compare_text));
     }
 
@@ -806,4 +806,488 @@ mod tests {
         assert_eq!(segment_ranges[0].end_byte, 6); // Does not modify the contents of Segment 1!
         assert_eq!(segment_ranges[1].start_byte, 7); // Offset by 1 from Hard Break.
     }
+
+    #[test]
+    fn build_styled_inline_ranges_text_before_link_produces_correct_ranges() {
+        let segments = vec![
+            LayoutInline::Text {
+                text: "Hello ".to_string(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            },
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: "World".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                }],
+                url: "test/url".to_string(),
+                title: None,
+            },
+        ];
+
+        let expected = vec![
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 0,
+                end_byte: 6,
+                child_idx: None,
+            },
+            StyledInlineRange {
+                segment_idx: 1,
+                start_byte: 6,
+                end_byte: 11,
+                child_idx: Some(0),
+            },
+        ];
+
+        let result = build_styled_inline_ranges(&segments);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn build_styled_inline_ranges_text_after_link_produces_correct_ranges() {
+        let segments = vec![
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: "World".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                }],
+                url: "test/url".to_string(),
+                title: None,
+            },
+            LayoutInline::Text {
+                text: "Hello ".to_string(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            },
+        ];
+
+        let expected = vec![
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 0,
+                end_byte: 5,
+                child_idx: Some(0),
+            },
+            StyledInlineRange {
+                segment_idx: 1,
+                start_byte: 5,
+                end_byte: 11,
+                child_idx: None,
+            },
+        ];
+
+        let result = build_styled_inline_ranges(&segments);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn build_styled_inline_ranges_mixed_formatting_children_produces_correct_ranges() {
+        // * [**Bold** *Italic* Normal `monospace`][test/url]
+        let segments = vec![LayoutInline::InlineLink {
+            link_text: vec![
+                LayoutInline::Text {
+                    text: "Bold".to_string(),
+                    weight: Weight::BOLD,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: " ".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: "Italic".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Italic,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: " ".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: "Normal".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: " ".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: "Monospace".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::Monospace,
+                },
+            ],
+            url: "test/url".to_string(),
+            title: None,
+        }];
+
+        let expected = vec![
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 0,
+                end_byte: 4,
+                child_idx: Some(0),
+            },
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 4,
+                end_byte: 5,
+                child_idx: Some(1),
+            },
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 5,
+                end_byte: 11,
+                child_idx: Some(2),
+            },
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 11,
+                end_byte: 12,
+                child_idx: Some(3),
+            },
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 12,
+                end_byte: 18,
+                child_idx: Some(4),
+            },
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 18,
+                end_byte: 19,
+                child_idx: Some(5),
+            },
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 19,
+                end_byte: 28,
+                child_idx: Some(6),
+            },
+        ];
+
+        let result = build_styled_inline_ranges(&segments);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn build_styled_inline_ranges_consecutive_links_produce_correct_ranges() {
+        // * [Hello][test/url] [World][another/url]
+        let segments = vec![
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: "Hello ".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                }],
+                url: "test/url".to_string(),
+                title: None,
+            },
+            LayoutInline::Text {
+                text: " ".to_string(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            },
+            LayoutInline::InlineLink {
+                link_text: vec![LayoutInline::Text {
+                    text: "World".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                }],
+                url: "another/url".to_string(),
+                title: None,
+            },
+        ];
+
+        let expected = vec![
+            StyledInlineRange {
+                segment_idx: 0,
+                start_byte: 0,
+                end_byte: 6,
+                child_idx: Some(0),
+            },
+            StyledInlineRange {
+                segment_idx: 1,
+                start_byte: 6,
+                end_byte: 7,
+                child_idx: None,
+            },
+            StyledInlineRange {
+                segment_idx: 2,
+                start_byte: 7,
+                end_byte: 12,
+                child_idx: Some(0),
+            },
+        ];
+
+        let result = build_styled_inline_ranges(&segments);
+
+        assert_eq!(result, expected);
+    }
+
+    // * -- Run State --
+    #[test]
+    fn run_state_advance_emits_on_segment_change() {
+        let mut run_state = RunState::default();
+        let cfg = SvgConfig::default();
+
+        let segments = vec![
+            LayoutInline::Text {
+                text: "A".to_string(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            },
+            LayoutInline::Text {
+                text: "B".to_string(),
+                weight: Weight::BOLD,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            },
+        ];
+
+        // Initial state - no return
+        let result = run_state.advance("A", 0, None, &segments, cfg.text_opts.font_size);
+        assert_eq!(result, None);
+
+        // Cross segment boundary found, return previous segment.
+        let result = run_state.advance("B", 1, None, &segments, cfg.text_opts.font_size);
+        assert_eq!(
+            result,
+            Some(TspanDefinition::Text {
+                text: "A".to_string(),
+                font_size: cfg.text_opts.font_size,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif
+            })
+        );
+        // New segment added to existing text.
+        assert_eq!(run_state.current_text, "B");
+    }
+
+    #[test]
+    fn run_state_advance_accumulates_within_same_segment_returns_none() {
+        let mut run_state = RunState::default();
+        let cfg = SvgConfig::default();
+
+        let segments = vec![LayoutInline::Text {
+            text: "AB".to_string(),
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        }];
+
+        run_state.advance("A", 0, None, &segments, cfg.text_opts.font_size);
+
+        // Same segment, no change
+        let result = run_state.advance("B", 0, None, &segments, cfg.text_opts.font_size);
+        assert_eq!(result, None);
+
+        // Internal string buffer shows "AB"
+        assert_eq!(run_state.current_text, "AB");
+    }
+
+    #[test]
+    fn run_state_advance_partial_flush_when_child_segment_changes() {
+        let mut run_state = RunState::default();
+        let cfg = SvgConfig::default();
+
+        let segments = vec![LayoutInline::InlineLink {
+            link_text: vec![
+                LayoutInline::Text {
+                    text: "A".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: "B".to_string(),
+                    weight: Weight::BOLD,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+            ],
+            url: "test/url".to_string(),
+            title: None,
+        }];
+
+        // Initial state - no return
+        let result = run_state.advance("A", 0, Some(0), &segments, cfg.text_opts.font_size);
+        assert_eq!(result, None);
+
+        // Advance within same segment, partial flush to internal link_tspans. None returned.
+        let result = run_state.advance("B", 0, Some(1), &segments, cfg.text_opts.font_size);
+        assert_eq!(result, None);
+        assert_eq!(
+            run_state.link_tspans,
+            vec![TspanDefinition::Text {
+                text: "A".to_string(),
+                font_size: cfg.text_opts.font_size,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif
+            }]
+        );
+    }
+
+    #[test]
+    fn run_state_flush_returns_none_when_empty() {
+        let mut run_state = RunState::default();
+        let cfg = SvgConfig::default();
+
+        // No state, nothing returned.
+        let result = run_state.flush(&vec![], cfg.text_opts.font_size);
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn run_state_advance_inline_link_emits_when_segment_changes() {
+        let mut run_state = RunState::default();
+        let cfg = SvgConfig::default();
+
+        let segments = vec![
+            LayoutInline::InlineLink {
+                link_text: vec![
+                    LayoutInline::Text {
+                        text: "A".to_string(),
+                        weight: Weight::NORMAL,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif,
+                    },
+                    LayoutInline::Text {
+                        text: "B".to_string(),
+                        weight: Weight::BOLD,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif,
+                    },
+                ],
+                url: "test/url".to_string(),
+                title: None,
+            },
+            LayoutInline::Text {
+                text: "C".to_string(),
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            },
+        ];
+
+        run_state.advance("A", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("B", 0, Some(1), &segments, cfg.text_opts.font_size);
+        // Move into new Segment
+        let result = run_state.advance("C", 1, None, &segments, cfg.text_opts.font_size);
+
+        assert_eq!(
+            result,
+            Some(TspanDefinition::InlineLink {
+                text: vec![
+                    TspanDefinition::Text {
+                        text: "A".to_string(),
+                        font_size: cfg.text_opts.font_size,
+                        weight: Weight::NORMAL,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif
+                    },
+                    TspanDefinition::Text {
+                        text: "B".to_string(),
+                        font_size: cfg.text_opts.font_size,
+                        weight: Weight::BOLD,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif
+                    }
+                ],
+                url: "test/url".to_string(),
+                title: None
+            })
+        );
+        assert_eq!(run_state.current_text, "C".to_string());
+    }
+
+    #[test]
+    fn run_state_flush_emits_inline_link_with_all_children() {
+        let mut run_state = RunState::default();
+        let cfg = SvgConfig::default();
+
+        let segments = vec![LayoutInline::InlineLink {
+            link_text: vec![
+                LayoutInline::Text {
+                    text: "A".to_string(),
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+                LayoutInline::Text {
+                    text: "B".to_string(),
+                    weight: Weight::BOLD,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                },
+            ],
+            url: "test/url".to_string(),
+            title: None,
+        }];
+
+        run_state.advance("A", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("B", 0, Some(1), &segments, cfg.text_opts.font_size);
+
+        // Flush state
+        // ? This mimics behaviour where the last line of a run is a link.
+        let result = run_state.flush(&segments, cfg.text_opts.font_size);
+        assert_eq!(
+            result,
+            Some(TspanDefinition::InlineLink {
+                text: vec![
+                    TspanDefinition::Text {
+                        text: "A".to_string(),
+                        font_size: cfg.text_opts.font_size,
+                        weight: Weight::NORMAL,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif
+                    },
+                    TspanDefinition::Text {
+                        text: "B".to_string(),
+                        font_size: cfg.text_opts.font_size,
+                        weight: Weight::BOLD,
+                        style: Style::Normal,
+                        family: FamilyOwned::SansSerif
+                    }
+                ],
+                url: "test/url".to_string(),
+                title: None
+            })
+        );
+        // Ensure our state has been zero'd.
+        assert!(run_state.link_tspans.is_empty());
+        assert!(run_state.current_text.is_empty());
+    }
+
+    #[test]
+    fn run_state_advance_link_followed_by_text_emits_correctly() {}
+
 }
