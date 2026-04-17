@@ -154,16 +154,24 @@ impl TspanDefinition {
                 tspan
             }
             TspanDefinition::InlineLink { text, url, title } => {
+                let escaped_url = html_escape(&url);
+                
                 let child_text = text
                     .into_iter()
                     .map(|ch| ch.to_svg_string())
                     .collect::<String>();
-                let tspan = format!(
-                    r#"<a href="{}"><title>{}</title>{}</a>"#,
-                    url,
-                    title.unwrap_or_default(),
-                    child_text
-                );
+                let tspan = match title {
+                    Some(escaped_title) => format!(
+                        r#"<a href="{}"><title>{}</title>{}</a>"#,
+                        escaped_url,
+                        html_escape(&escaped_title),
+                        child_text
+                    ),
+
+                    // html_escape
+                    None => format!(r#"<a href="{}">{}</a>"#, escaped_url, child_text),
+                };
+
                 tspan
             }
         }
@@ -594,10 +602,9 @@ mod tests {
     #[test]
     fn tspans_to_svg_preserves_bold_weight_includes_attribute() {
         // * Arrange
-        // Create a simple input text, no styling.
         let input_text = "Hello World".to_string();
         let attr = r#"font-weight="bold""#.to_string();
-        // Form a TSpan with some default X/Y.
+
         let tspan = TspanDefinition::Text {
             text: input_text.clone(),
             font_size: 16.0,
@@ -606,8 +613,8 @@ mod tests {
             family: FamilyOwned::SansSerif,
         };
         // * Act
-        // call `tspans_to_svg` with the created TSpan, X, Y
         let svg_string = tspans_to_svg(vec![tspan], 0.0, 16.0);
+
         // * Assert
         // CreatedTspanStr contains our simple input text.
         assert!(svg_string.contains(&input_text));
@@ -724,8 +731,106 @@ mod tests {
         assert!(svg_string.contains(&compare_text));
     }
 
-    // * --- build_segment_ranges ---
+    #[test]
+    fn tspans_to_svg_inline_link_emits_wrapped_tspan() {
+        let link_text = TspanDefinition::InlineLink {
+            text: vec![TspanDefinition::Text {
+                text: "Hello".to_string(),
+                font_size: 16.0,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }],
+            url: "test/url".to_string(),
+            title: None,
+        };
 
+        let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
+        println!("{:#?}", result);
+        assert!(result.contains(r#"<a href="test/url""#));
+        assert!(result.ends_with("</a></text>"));
+        assert!(result.contains("<tspan"));
+    }
+
+    #[test]
+    fn tspans_to_svg_inline_link_preserves_styles() {}
+
+    #[test]
+    fn tspans_to_svg_inline_link_preserves_title() {
+        let link_text = TspanDefinition::InlineLink {
+            text: vec![TspanDefinition::Text {
+                text: "Hello".to_string(),
+                font_size: 16.0,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }],
+            url: "test/url".to_string(),
+            title: Some("My Title".to_string()),
+        };
+
+        let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
+
+        assert!(result.contains("<title>My Title</title>"));
+    }
+
+    #[test]
+    fn tspans_to_svg_inline_link_no_title_omits_title_tag() {
+        let link_text = TspanDefinition::InlineLink {
+            text: vec![TspanDefinition::Text {
+                text: "Hello".to_string(),
+                font_size: 16.0,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }],
+            url: "test/url".to_string(),
+            title: None,
+        };
+
+        let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
+
+        assert!(!result.contains("<title>"));
+    }
+
+    #[test]
+    fn tspans_to_svg_inline_link_escapes_url() {
+        let link_text = TspanDefinition::InlineLink {
+            text: vec![TspanDefinition::Text {
+                text: "Hello".to_string(),
+                font_size: 16.0,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }],
+            url: "http://www.example.com?a=1&b=2".to_string(),
+            title: None,
+        };
+
+        let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
+        println!("{}",result);
+        assert!(result.contains("http://www.example.com?a=1&amp;b=2"));
+    }
+    
+    #[test]
+    fn tspans_to_svg_inline_link_escapes_title() {
+        let link_text = TspanDefinition::InlineLink {
+            text: vec![TspanDefinition::Text {
+                text: "Hello".to_string(),
+                font_size: 16.0,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }],
+            url: "test/url".to_string(),
+            title: Some(r#" " & < > "#.to_string()),
+        };
+
+        let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
+        assert!(result.contains(" &quot; &amp; &lt; &gt;"));
+    }
+
+    // * --- build_segment_ranges ---
     #[test]
     fn build_segment_single_text_segment_has_correct_byte_offsets() {
         // * Arrange
@@ -1286,8 +1391,4 @@ mod tests {
         assert!(run_state.link_tspans.is_empty());
         assert!(run_state.current_text.is_empty());
     }
-
-    #[test]
-    fn run_state_advance_link_followed_by_text_emits_correctly() {}
-
 }
