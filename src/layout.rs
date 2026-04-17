@@ -735,7 +735,7 @@ mod tests {
     }
 
     #[test]
-    fn tspans_to_svg_inline_link_emits_wrapped_tspan() {
+    fn tspans_to_svg_inline_link_emits_anchor_element() {
         let link_text = TspanDefinition::InlineLink {
             text: vec![TspanDefinition::Text {
                 text: "Hello".to_string(),
@@ -756,7 +756,27 @@ mod tests {
     }
 
     #[test]
-    fn tspans_to_svg_inline_link_preserves_styles() {}
+    fn tspans_to_svg_inline_link_children_rendered_as_tspans() {
+        let link_text = TspanDefinition::InlineLink {
+            text: vec![TspanDefinition::Text {
+                text: "Hello".to_string(),
+                font_size: 16.0,
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }],
+            url: "test/url".to_string(),
+            title: None,
+        };
+
+        let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
+
+        let a_start = result.find("<a ").unwrap();
+        let a_end = result.find("</a>").unwrap();
+        let anchor_content = &result[a_start..a_end];
+        assert!(anchor_content.contains("<tspan"));
+        assert!(anchor_content.contains("Hello"));
+    }
 
     #[test]
     fn tspans_to_svg_inline_link_preserves_title() {
@@ -831,6 +851,24 @@ mod tests {
 
         let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
         assert!(result.contains(" &quot; &amp; &lt; &gt;"));
+    }
+
+    // * --- to_svg_string * ---
+    #[test]
+    fn tspan_definition_text_produces_well_formed_tspan_element() {
+        let tspan = TspanDefinition::Text {
+            text: "Hello".to_string(),
+            font_size: 16.0,
+            weight: Weight::NORMAL,
+            style: Style::Normal,
+            family: FamilyOwned::SansSerif,
+        };
+
+        let result = tspan.to_svg_string();
+
+        assert!(result.starts_with("<tspan"));
+        assert!(result.ends_with("</tspan>"));
+        assert!(result.contains(">Hello<"));
     }
 
     // * --- build_segment_ranges ---
