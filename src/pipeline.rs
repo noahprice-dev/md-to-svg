@@ -1,5 +1,8 @@
 use std::{
-    collections::HashMap, fs::{self, File}, io::{BufWriter, ErrorKind, Write}, path::Path
+    collections::HashMap,
+    fs::{self, File},
+    io::{BufWriter, ErrorKind, Write},
+    path::Path,
 };
 
 use cosmic_text::FontSystem;
@@ -9,7 +12,8 @@ use crate::{
     MdToSvgError,
     config::SvgConfig,
     layout::{LayoutItem, process_layouts},
-    parser::node_to_styled_block, styles::StyledBlock,
+    parser::node_to_styled_block,
+    styles::StyledBlock,
 };
 
 pub fn process_md_to_svg(
@@ -35,19 +39,17 @@ pub fn process_md_to_svg(
     // * Note - per the `markdown` documentation, this cannot fail using standard parse options.
     // * It should only fail if JSX/MDX is enabled, AND that parsing fails.
     let root = markdown::to_mdast(&md_text, &ParseOptions::default())?;
-    
-    
-    let styled_blocks: Vec<crate::styles::StyledBlock> = node_to_styled_block(&root, 0);
-    
-    let definitions: HashMap<String, Definition> = styled_blocks
-    .iter()
-    .filter_map(|block| match block {
-        StyledBlock::Definition(def) => Some((def.identifier.clone(), def.clone())),
-        _ => None,
-    })
-    .collect();
 
-    
+    let styled_blocks: Vec<crate::styles::StyledBlock> = node_to_styled_block(&root, 0);
+
+    let definitions: HashMap<String, Definition> = styled_blocks
+        .iter()
+        .filter_map(|block| match block {
+            StyledBlock::Definition(def) => Some((def.identifier.clone(), def.clone())),
+            _ => None,
+        })
+        .collect();
+
     let layout_items = styled_blocks
         .into_iter()
         .filter_map(|block| match block {
@@ -57,8 +59,13 @@ pub fn process_md_to_svg(
                 left: cfg.canvas_opts.padding.left,
                 right: cfg.canvas_opts.width - cfg.canvas_opts.padding.right,
             }),
-            _ => Some(LayoutItem::Block(block.into_layout_block(cfg, font_system, &definitions)))})
-            .collect();
+            _ => Some(LayoutItem::Block(block.into_layout_block(
+                cfg,
+                font_system,
+                &definitions,
+            ))),
+        })
+        .collect();
 
     let text_tags = process_layouts(layout_items, cfg);
 

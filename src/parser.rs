@@ -217,12 +217,12 @@ pub fn node_to_styled_block(node: &Node, indent: u8) -> Vec<StyledBlock> {
 
 #[cfg(test)]
 mod tests {
-    use markdown::ParseOptions;
-    use pretty_assertions::assert_eq;
     use crate::{
         parser::node_to_styled_block,
         styles::{StyledBlock, StyledInline},
     };
+    use markdown::ParseOptions;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn parse_inline_link_produces_styled_inline_inline_link() {
@@ -335,7 +335,7 @@ mod tests {
     // fn parse_reference_link_produces_styled_inline_link_reference() {
     //     todo!()
     // }
-    
+
     #[test]
     fn parse_empty_shortcut_reference_renders_as_plain_text() {
         let text = r#"[foo][]"#;

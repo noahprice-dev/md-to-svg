@@ -34,10 +34,7 @@ pub enum StyledInline {
 impl StyledInline {
     /// Parse an InlineStyle into a set of flat LayoutInlines.
     /// This function consumes the original StyledInline and the children of the original object.
-    fn into_layout_inline(
-        self,
-        definitions: &HashMap<String, Definition>,
-    ) -> Vec<LayoutInline> {
+    fn into_layout_inline(self, definitions: &HashMap<String, Definition>) -> Vec<LayoutInline> {
         // StyledInline::Text(StyledSpan::new(text, ctx))
         self.transform(StyleContext::default(), definitions)
     }

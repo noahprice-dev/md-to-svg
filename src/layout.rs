@@ -155,7 +155,7 @@ impl TspanDefinition {
             }
             TspanDefinition::InlineLink { text, url, title } => {
                 let escaped_url = html_escape(&url);
-                
+
                 let child_text = text
                     .into_iter()
                     .map(|ch| ch.to_svg_string())
@@ -808,10 +808,10 @@ mod tests {
         };
 
         let result = tspans_to_svg(vec![link_text], 0.0, 16.0);
-        println!("{}",result);
+        println!("{}", result);
         assert!(result.contains("http://www.example.com?a=1&amp;b=2"));
     }
-    
+
     #[test]
     fn tspans_to_svg_inline_link_escapes_title() {
         let link_text = TspanDefinition::InlineLink {

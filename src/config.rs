@@ -278,7 +278,7 @@ pub struct TypographyOverride {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_char: Option<String>,
-    
+
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub indent_first_bullet: Option<bool>,
@@ -341,7 +341,7 @@ mod tests {
             paragraph_spacing_em: None,
             bullet_indent_em: None,
             bullet_char: None,
-            indent_first_bullet: None
+            indent_first_bullet: None,
         };
 
         let preset_config = PresetConfig {
