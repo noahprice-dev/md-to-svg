@@ -1,8 +1,13 @@
+use std::path::PathBuf;
+
 use md_to_svg::config::SvgConfig;
 use md_to_svg::layout::{LayoutItem, process_layouts};
+use md_to_svg::pipeline::{process_md_to_svg, write_svg_to_file};
 use md_to_svg::styles::{StyledBlock, StyledInline};
 
-use crate::common::{create_default_test_font_system, normalize_svg_for_comparison};
+use crate::common::{
+    create_default_test_font_system, get_normalized_fixture_path, normalize_svg_for_comparison,
+};
 
 mod common;
 
@@ -170,4 +175,82 @@ fn process_layouts_handles_thematic_break() {
 
     assert!(svg_lines[0].contains("Hello World"));
     assert!(svg_lines[1].contains("<line"))
+}
+
+#[test]
+fn process_md_to_svg_renders_inline_link() {
+    let mut font_system = create_default_test_font_system();
+    let cfg = SvgConfig::default();
+
+    let test_fixture =
+        get_normalized_fixture_path(&["tests", "fixtures", "inline_link_fixture.md"]);
+
+    let result = process_md_to_svg(&test_fixture, &mut font_system, &cfg)
+        .expect("Should be able to read fixture file.");
+
+    assert!(result.contains(r#"<a href="https://example.com""#));
+    assert!(result.contains("Inline Link"));
+}
+
+#[test]
+fn process_md_to_svg_renders_inline_link_with_styled_text() {
+    let mut font_system = create_default_test_font_system();
+    let cfg = SvgConfig::default();
+
+    let test_fixture =
+        get_normalized_fixture_path(&["tests", "fixtures", "inline_link_fixture.md"]);
+
+    let result = process_md_to_svg(&test_fixture, &mut font_system, &cfg)
+        .expect("Should be able to read fixture file.");
+
+    assert!(result.contains(r#"<a href="https://example.com""#));
+    assert!(result.contains(r#"font-style="italic""#)); // ? is this enough?
+}
+
+#[test]
+fn process_md_to_svg_renders_reference_link() {
+    let mut font_system = create_default_test_font_system();
+    let cfg = SvgConfig::default();
+
+    let test_fixture =
+        get_normalized_fixture_path(&["tests", "fixtures", "inline_link_fixture.md"]);
+
+    let result = process_md_to_svg(&test_fixture, &mut font_system, &cfg)
+        .expect("Should be able to read fixture file.");
+
+    assert!(result.contains(r#"<a href="https://example.com""#));
+    assert!(result.contains("Reference Link"));
+    assert!(!result.contains("[ref]"));
+    assert!(!result.contains(r#"https://example.com "Reference Title""#));
+}
+
+#[test]
+fn process_md_to_svg_invalid_path_returns_input_not_found() {
+    let mut font_system = create_default_test_font_system();
+    let cfg = SvgConfig::default();
+
+    let invalid_path: PathBuf = "invalid/path/file.md".into();
+    let result = process_md_to_svg(&invalid_path, &mut font_system, &cfg);
+    
+    assert!(matches!(result, Err(md_to_svg::MdToSvgError::InputNotFound(_))));
+}
+
+#[test]
+fn write_svg_to_file_invalid_path_returns_output_not_found() {
+    let invalid_path: PathBuf = "invalid/path/file.md".into();
+    let result = write_svg_to_file(&invalid_path, String::new());
+    
+    assert!(matches!(result, Err(md_to_svg::MdToSvgError::OutputNotFound(_))));
+}
+
+#[test]
+#[ignore = "requires Unix file permission manipulation, not reliable cross-platform"]
+fn process_md_to_svg_unreadable_file_returns_input_unreadable() {
+    todo!()
+}
+
+#[test]
+#[ignore = "requires Unix file permission manipulation, not reliable cross-platform"]
+fn process_write_svg_to_file_unreadable_file_returns_input_unreadable() {
+    todo!()
 }
