@@ -111,47 +111,50 @@ impl TspanDefinition {
                 style,
                 family,
             } => {
-                // Create the base raw_string value
-                let mut tspan = r#"<tspan"#.to_string();
+                let mut attrs: Vec<String> = Vec::new();
 
                 if weight == Weight::BOLD {
-                    tspan.push_str(r#" font-weight="bold""#);
+                    attrs.push(r#"font-weight="bold""#.to_string());
                 };
 
                 match style {
                     Style::Italic => {
-                        tspan.push_str(r#" font-style="italic""#);
+                        attrs.push(r#"font-style="italic""#.to_string());
                     }
                     Style::Oblique => {
-                        tspan.push_str(r#" font-style="oblique""#);
+                        attrs.push(r#"font-style="oblique""#.to_string());
                     }
                     Style::Normal => {}
                 };
-                tspan.push_str(&format!(r#" font-size="{}px""#, font_size));
+
+                attrs.push(format!(r#"font-size="{}px""#, font_size));
 
                 match family {
                     FamilyOwned::Name(smol_str) => {
-                        tspan.push_str(&format!(r#" font-family="{}, sans-serif""#, smol_str));
+                        attrs.push(format!(r#"font-family="{}, sans-serif""#, smol_str));
                     }
                     FamilyOwned::SansSerif => {
-                        tspan.push_str(r#" font-family="sans-serif""#);
+                        attrs.push(r#"font-family="sans-serif""#.to_string());
                     }
                     FamilyOwned::Serif => {
-                        tspan.push_str(r#" font-family="serif""#);
+                        attrs.push(r#"font-family="serif""#.to_string());
                     }
                     FamilyOwned::Cursive => {
-                        tspan.push_str(r#" font-family="cursive""#);
+                        attrs.push(r#"font-family="cursive""#.to_string());
                     }
                     FamilyOwned::Fantasy => {
-                        tspan.push_str(r#" font-family="fantasy""#);
+                        attrs.push(r#"font-family="fantasy""#.to_string());
                     }
                     FamilyOwned::Monospace => {
-                        tspan.push_str(r#" font-family="monospace""#);
+                        attrs.push(r#"font-family="monospace""#.to_string());
                     }
                 };
-                tspan.push_str(&format!(r#">{}</tspan>"#, html_escape(&text)));
 
-                tspan
+                format!(
+                    r#"<tspan {}>{}</tspan>"#,
+                    attrs.join(" "),
+                    html_escape(&text)
+                )
             }
             TspanDefinition::InlineLink { text, url, title } => {
                 let escaped_url = html_escape(&url);
