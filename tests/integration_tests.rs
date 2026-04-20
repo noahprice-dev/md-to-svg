@@ -231,16 +231,22 @@ fn process_md_to_svg_invalid_path_returns_input_not_found() {
 
     let invalid_path: PathBuf = "invalid/path/file.md".into();
     let result = process_md_to_svg(&invalid_path, &mut font_system, &cfg);
-    
-    assert!(matches!(result, Err(md_to_svg::MdToSvgError::InputNotFound(_))));
+
+    assert!(matches!(
+        result,
+        Err(md_to_svg::MdToSvgError::InputNotFound(_))
+    ));
 }
 
 #[test]
 fn write_svg_to_file_invalid_path_returns_output_not_found() {
     let invalid_path: PathBuf = "invalid/path/file.md".into();
     let result = write_svg_to_file(&invalid_path, String::new());
-    
-    assert!(matches!(result, Err(md_to_svg::MdToSvgError::OutputNotFound(_))));
+
+    assert!(matches!(
+        result,
+        Err(md_to_svg::MdToSvgError::OutputNotFound(_))
+    ));
 }
 
 #[test]
