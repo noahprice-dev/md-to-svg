@@ -191,11 +191,9 @@ struct RunState {
 }
 impl RunState {
     // TODO: font_size belongs on LayoutInline::Text - relevant when implementing sub/superscript.
-    // TODO - reword this to be less robotic.
     /// Move forward in the text state.
     /// Compares the current state versus the inccoming state, optionally returning a TSpanDefinition if a segment change is detected.
     /// In the case of a child segment changing within a segment, format and store the child range to be returned with other children on segment change.
-    ///
     fn advance(
         &mut self,
         new_char: &str,
@@ -310,14 +308,14 @@ impl RunState {
                         // ? This is a common point of friction for me - it feels like we are defining behaviour that makes this invalid state impossible,
                         // ? rather than relying on the type-system to guarantee it.
                         if let LayoutInline::Text {
-                            text,
+                            text: _,
                             weight,
                             style,
                             family,
                         } = link_lyt_inlines[self.current_child_idx?].clone()
                         {
                             self.link_tspans.push(TspanDefinition::Text {
-                                text,
+                                text: self.current_text.clone(),
                                 font_size,
                                 weight,
                                 style,
@@ -399,10 +397,23 @@ fn process_layout_line(layout: &LayoutBlock, y_cursor: f32, cfg: &SvgConfig) -> 
 
     // * Build our Segment Map for this LayoutLine.
     let segment_ranges = build_styled_inline_ranges(&layout.segments);
+    // for range in &segment_ranges {
+    //     println!("Range: segment_idx: {} | start: {} | end: {} | child_idx {:?}",
+    //         range.segment_idx,
+    //         range.start_byte,
+    //         range.end_byte,
+    //         range.child_idx,
+    //     )
+    // }
 
     let mut run_byte_offset: usize = 0;
 
     for (_idx, run) in layout.buffer.layout_runs().enumerate() {
+        println!(
+            "Run: {} | Run Text: {}, Run Line: {}",
+            _idx, run.text, run.line_i
+        );
+        println!("Run: {} | Run Glyphs Count: {}", _idx, run.glyphs.len());
         let baseline_y = y_cursor + run.line_y;
 
         let full_text: &String = &layout.segments.iter().map(|seg| seg.raw_text()).collect();
@@ -425,9 +436,9 @@ fn process_layout_line(layout: &LayoutBlock, y_cursor: f32, cfg: &SvgConfig) -> 
         // * Therefore, we use a run_byte_offset for wrapped runs, and do not for soft-wrapped runs.
         run_byte_offset =
             if full_text.as_bytes().get(run_byte_offset + run.glyphs.len()) == Some(&b'\n') {
-                run_byte_offset + run.glyphs.len() + 1
+                run_byte_offset + run.glyphs.len() + 1 // Hardbreak, skip new line char
             } else {
-                0
+                0 //run_byte_offset + run.glyphs.len() // Soft break - advance forward.
             };
 
         svg_elements.push(tspans_to_svg(tspans, current_x, run.line_y + y_cursor));
@@ -475,10 +486,13 @@ fn process_run(
 
         // Adjust the starting byte position to account for the prefix & our prior glyphs in the run.
         let adjusted_byte_pos = (glyph.start - prefix_len) + run_byte_offset;
-
+        // println!("glyph.start: {} | adjusted_byte_pos: {} | char: {}",
+        //     glyph.start,
+        //     adjusted_byte_pos,
+        //     &run.text[glyph.start..glyph.end]
+        // );
         // Find which segment this glyph belongs to.
-        // ? Same as before, but I unwrap it here instead of taking two steps.
-        let segment_style_idx = segment_ranges
+        let segment_style = segment_ranges
             .iter()
             .find(|range| {
                 adjusted_byte_pos >= range.start_byte && adjusted_byte_pos < range.end_byte
@@ -497,8 +511,8 @@ fn process_run(
         run_state
             .advance(
                 &run.text[glyph.start..glyph.end],
-                segment_style_idx.segment_idx,
-                segment_style_idx.child_idx,
+                segment_style.segment_idx,
+                segment_style.child_idx,
                 segments,
                 font_size,
             )
@@ -1203,13 +1217,13 @@ mod tests {
 
         let segments = vec![
             LayoutInline::Text {
-                text: "A".to_string(),
+                text: "Foo".to_string(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             },
             LayoutInline::Text {
-                text: "B".to_string(),
+                text: "Bar".to_string(),
                 weight: Weight::BOLD,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
@@ -1217,7 +1231,9 @@ mod tests {
         ];
 
         // Initial state - no return
-        let result = run_state.advance("A", 0, None, &segments, cfg.text_opts.font_size);
+        run_state.advance("F", 0, None, &segments, cfg.text_opts.font_size);
+        run_state.advance("o", 0, None, &segments, cfg.text_opts.font_size);
+        let result = run_state.advance("o", 0, None, &segments, cfg.text_opts.font_size);
         assert_eq!(result, None);
 
         // Cross segment boundary found, return previous segment.
@@ -1225,7 +1241,7 @@ mod tests {
         assert_eq!(
             result,
             Some(TspanDefinition::Text {
-                text: "A".to_string(),
+                text: "Foo".to_string(),
                 font_size: cfg.text_opts.font_size,
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -1242,20 +1258,20 @@ mod tests {
         let cfg = SvgConfig::default();
 
         let segments = vec![LayoutInline::Text {
-            text: "AB".to_string(),
+            text: "Hello".to_string(),
             weight: Weight::NORMAL,
             style: Style::Normal,
             family: FamilyOwned::SansSerif,
         }];
 
-        run_state.advance("A", 0, None, &segments, cfg.text_opts.font_size);
+        run_state.advance("H", 0, None, &segments, cfg.text_opts.font_size);
 
         // Same segment, no change
-        let result = run_state.advance("B", 0, None, &segments, cfg.text_opts.font_size);
+        let result = run_state.advance("e", 0, None, &segments, cfg.text_opts.font_size);
         assert_eq!(result, None);
 
         // Internal string buffer shows "AB"
-        assert_eq!(run_state.current_text, "AB");
+        assert_eq!(run_state.current_text, "He");
     }
 
     #[test]
@@ -1266,13 +1282,13 @@ mod tests {
         let segments = vec![LayoutInline::InlineLink {
             link_text: vec![
                 LayoutInline::Text {
-                    text: "A".to_string(),
+                    text: "Foo".to_string(),
                     weight: Weight::NORMAL,
                     style: Style::Normal,
                     family: FamilyOwned::SansSerif,
                 },
                 LayoutInline::Text {
-                    text: "B".to_string(),
+                    text: "Bar".to_string(),
                     weight: Weight::BOLD,
                     style: Style::Normal,
                     family: FamilyOwned::SansSerif,
@@ -1283,7 +1299,9 @@ mod tests {
         }];
 
         // Initial state - no return
-        let result = run_state.advance("A", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("F", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("o", 0, Some(0), &segments, cfg.text_opts.font_size);
+        let result = run_state.advance("o", 0, Some(0), &segments, cfg.text_opts.font_size);
         assert_eq!(result, None);
 
         // Advance within same segment, partial flush to internal link_tspans. None returned.
@@ -1292,7 +1310,7 @@ mod tests {
         assert_eq!(
             run_state.link_tspans,
             vec![TspanDefinition::Text {
-                text: "A".to_string(),
+                text: "Foo".to_string(),
                 font_size: cfg.text_opts.font_size,
                 weight: Weight::NORMAL,
                 style: Style::Normal,
@@ -1321,13 +1339,13 @@ mod tests {
             LayoutInline::InlineLink {
                 link_text: vec![
                     LayoutInline::Text {
-                        text: "A".to_string(),
+                        text: "Foo".to_string(),
                         weight: Weight::NORMAL,
                         style: Style::Normal,
                         family: FamilyOwned::SansSerif,
                     },
                     LayoutInline::Text {
-                        text: "B".to_string(),
+                        text: "Bar".to_string(),
                         weight: Weight::BOLD,
                         style: Style::Normal,
                         family: FamilyOwned::SansSerif,
@@ -1337,31 +1355,37 @@ mod tests {
                 title: None,
             },
             LayoutInline::Text {
-                text: "C".to_string(),
+                text: "Baz".to_string(),
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
             },
         ];
 
-        run_state.advance("A", 0, Some(0), &segments, cfg.text_opts.font_size);
+        // Accumulate full link text segment
+        run_state.advance("F", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("o", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("o", 0, Some(0), &segments, cfg.text_opts.font_size);
         run_state.advance("B", 0, Some(1), &segments, cfg.text_opts.font_size);
+        run_state.advance("a", 0, Some(1), &segments, cfg.text_opts.font_size);
+        run_state.advance("r", 0, Some(1), &segments, cfg.text_opts.font_size);
+
         // Move into new Segment
-        let result = run_state.advance("C", 1, None, &segments, cfg.text_opts.font_size);
+        let result = run_state.advance("B", 1, None, &segments, cfg.text_opts.font_size);
 
         assert_eq!(
             result,
             Some(TspanDefinition::InlineLink {
                 text: vec![
                     TspanDefinition::Text {
-                        text: "A".to_string(),
+                        text: "Foo".to_string(),
                         font_size: cfg.text_opts.font_size,
                         weight: Weight::NORMAL,
                         style: Style::Normal,
                         family: FamilyOwned::SansSerif
                     },
                     TspanDefinition::Text {
-                        text: "B".to_string(),
+                        text: "Bar".to_string(),
                         font_size: cfg.text_opts.font_size,
                         weight: Weight::BOLD,
                         style: Style::Normal,
@@ -1372,9 +1396,48 @@ mod tests {
                 title: None
             })
         );
-        assert_eq!(run_state.current_text, "C".to_string());
+        assert_eq!(run_state.current_text, "B".to_string());
     }
 
+    #[test]
+    fn run_state_flush_emits_only_accumulated_link_text_not_full_segment() {
+        let mut run_state = RunState::default();
+
+        let segments = vec![LayoutInline::InlineLink {
+            link_text: vec![LayoutInline::Text {
+                text: "reasonable width constraint".to_string(), // full text
+                weight: Weight::NORMAL,
+                style: Style::Normal,
+                family: FamilyOwned::SansSerif,
+            }],
+            url: "test/url".to_string(),
+            title: None,
+        }];
+
+        // Simulate partial accumulation - only first word rendered in this run
+        run_state.advance("r", 0, Some(0), &segments, 16.0);
+        run_state.advance("e", 0, Some(0), &segments, 16.0);
+        // ? Note that we are inserting a different character than what is within the LayoutInline::Text.text field
+        // ? this verifies that we are not returning the content of the segment, rather we are storing & returning the accumulated text.
+        run_state.advance("d", 0, Some(0), &segments, 16.0);
+
+        let result = run_state.flush(&segments, 16.0);
+
+        assert_eq!(
+            result,
+            Some(TspanDefinition::InlineLink {
+                text: vec![TspanDefinition::Text {
+                    text: "red".to_string(), // only accumulated, not "reasonable width constraint"
+                    font_size: 16.0,
+                    weight: Weight::NORMAL,
+                    style: Style::Normal,
+                    family: FamilyOwned::SansSerif,
+                }],
+                url: "test/url".to_string(),
+                title: None,
+            })
+        );
+    }
     #[test]
     fn run_state_flush_emits_inline_link_with_all_children() {
         let mut run_state = RunState::default();
@@ -1383,13 +1446,13 @@ mod tests {
         let segments = vec![LayoutInline::InlineLink {
             link_text: vec![
                 LayoutInline::Text {
-                    text: "A".to_string(),
+                    text: "Foo".to_string(),
                     weight: Weight::NORMAL,
                     style: Style::Normal,
                     family: FamilyOwned::SansSerif,
                 },
                 LayoutInline::Text {
-                    text: "B".to_string(),
+                    text: "Bar".to_string(),
                     weight: Weight::BOLD,
                     style: Style::Normal,
                     family: FamilyOwned::SansSerif,
@@ -1399,8 +1462,14 @@ mod tests {
             title: None,
         }];
 
-        run_state.advance("A", 0, Some(0), &segments, cfg.text_opts.font_size);
+        // Accumulate both link text segments
+        run_state.advance("F", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("o", 0, Some(0), &segments, cfg.text_opts.font_size);
+        run_state.advance("o", 0, Some(0), &segments, cfg.text_opts.font_size);
+
         run_state.advance("B", 0, Some(1), &segments, cfg.text_opts.font_size);
+        run_state.advance("a", 0, Some(1), &segments, cfg.text_opts.font_size);
+        run_state.advance("r", 0, Some(1), &segments, cfg.text_opts.font_size);
 
         // Flush state
         // ? This mimics behaviour where the last line of a run is a link.
@@ -1410,14 +1479,14 @@ mod tests {
             Some(TspanDefinition::InlineLink {
                 text: vec![
                     TspanDefinition::Text {
-                        text: "A".to_string(),
+                        text: "Foo".to_string(),
                         font_size: cfg.text_opts.font_size,
                         weight: Weight::NORMAL,
                         style: Style::Normal,
                         family: FamilyOwned::SansSerif
                     },
                     TspanDefinition::Text {
-                        text: "B".to_string(),
+                        text: "Bar".to_string(),
                         font_size: cfg.text_opts.font_size,
                         weight: Weight::BOLD,
                         style: Style::Normal,
