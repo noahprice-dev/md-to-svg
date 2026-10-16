@@ -1,13 +1,11 @@
 use cosmic_text::{FamilyOwned, Style, Weight};
 
-
-
 #[derive(Debug, Clone, PartialEq)]
 // todo support strikethrough - this passes down to the SVG directly.
 /// Settings for a set of glyphs to be rendered.
 /// Family defaults to SansSerif
 // todo can we augment this to use Config defaults as a default? Alternatively use an
-pub struct StyledBlock{
+pub struct StyledBlock {
     pub text: String,
     pub weight: Weight,
     pub style: Style,
@@ -16,7 +14,7 @@ pub struct StyledBlock{
 impl StyledBlock {
     pub fn new(text: String, ctx: StyleContext) -> Self {
         StyledBlock {
-            text: text,
+            text,
             weight: if ctx.bold {
                 Weight::BOLD
             } else {
@@ -32,7 +30,6 @@ impl StyledBlock {
             } else {
                 FamilyOwned::SansSerif
             },
-            
         }
     }
 }
@@ -40,7 +37,7 @@ impl StyledBlock {
 #[derive(Clone, Debug, PartialEq)]
 pub enum StyledSegment {
     Text(StyledBlock),
-    HardBreak
+    HardBreak,
 }
 impl StyledSegment {
     pub fn text(text: String, ctx: StyleContext) -> Self {
@@ -78,10 +75,10 @@ impl StyledLine {
     pub fn get_type(&self) -> String {
         match self {
             StyledLine::Header { .. } => String::from("Header"),
-            StyledLine::BulletListItem {..} => String::from("Bullet List Item"),
+            StyledLine::BulletListItem { .. } => String::from("Bullet List Item"),
             StyledLine::NumberedListItem { .. } => String::from("Numbered List Item"),
             StyledLine::Paragraph { .. } => String::from("Paragraph"),
-            StyledLine::InlineCode { ..} => String::from("Code"),
+            StyledLine::InlineCode { .. } => String::from("Code"),
             StyledLine::Blank => String::from("Blank"),
         }
     }
@@ -90,20 +87,9 @@ impl StyledLine {
 // note: Strikethrough, Under/overline and other text decorations aren't supported in default Markdown and aren't showing in my node as unique text.
 // For now, I don't care to adapt these cases. However, they could likely be addded as further StyleContext cases later on.
 // ? it seems that these items are supported in GFM (Github Flavored Markdown) - for now, I would like to handle pure Markdown.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct StyleContext {
     pub bold: bool,
     pub italic: bool,
     pub monospace: bool,
 }
-
-impl StyleContext {
-    pub fn default() -> Self {
-        StyleContext {
-            bold: false,
-            italic: false,
-            monospace: false
-        }
-    }
-}
-

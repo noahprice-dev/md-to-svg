@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg_preset = &cli
         .preset_path
         .clone()
-        .map(|path| load_preset_config(path))
+        .map(load_preset_config)
         .transpose()?;
 
     let mut builder = Config::builder().add_source(
@@ -30,15 +30,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let settings = builder
-        .add_source(config::Config::try_from(&cli.overrides).expect("BUG: CLI Overrides should always serialize"))
+        .add_source(
+            config::Config::try_from(&cli.overrides)
+                .expect("BUG: CLI Overrides should always serialize"),
+        )
         .build()?;
     let svg_cfg: SvgConfig = settings.try_deserialize().unwrap();
 
     let mut font_system = FontSystem::new(); // * Detect system fonts and load
 
     let text_tags =
-        pipeline::process_md_to_svg(&Path::new(&cli.input_path), &mut font_system, &svg_cfg)?;
+        pipeline::process_md_to_svg(Path::new(&cli.input_path), &mut font_system, &svg_cfg)?;
 
-    pipeline::write_svg_to_file(&Path::new(&cli.output_path), text_tags)?;
+    pipeline::write_svg_to_file(Path::new(&cli.output_path), text_tags)?;
     Ok(())
 }

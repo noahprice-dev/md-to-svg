@@ -16,7 +16,7 @@ use crate::MdToSvgError;
 // ? Use `dirs` crate to derive config location agnostic to OS
 
 // * --- Default Configuration ---
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct SvgConfig {
     // SVG Canvas Options
     pub canvas_opts: CanvasConfig,
@@ -33,17 +33,6 @@ impl SvgConfig {
     /// Space between discrete paragraphs or blocks of text.
     pub const fn get_paragraph_spacing_factor(&self) -> f32 {
         self.text_opts.font_size * self.text_opts.paragraph_spacing_factor
-    }
-}
-impl Default for SvgConfig {
-    // / Create an SvgConfig with default values.
-    // / Notably: 800px high by 600px wide, font size 16px, no padding, white background.
-    fn default() -> Self {
-        SvgConfig {
-            canvas_opts: CanvasConfig::default(),
-            text_opts: TypographyConfig::default(),
-            header_opts: HeaderConfig::default(),
-        }
     }
 }
 
@@ -152,7 +141,7 @@ pub struct TypographyConfig {
     // todo  Explain default is sans-serif.
     //#[arg(skip)]
     //pub font_family: Family,
-    pub line_height_factor: f32, 
+    pub line_height_factor: f32,
     pub paragraph_spacing_factor: f32,
     pub bullet_indent_em: f32,
     pub bullet_char: String,
@@ -278,7 +267,7 @@ pub struct TypographyOverride {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bullet_char: Option<String>,
-    
+
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub indent_first_bullet: Option<bool>,
@@ -341,7 +330,7 @@ mod tests {
             paragraph_spacing_em: None,
             bullet_indent_em: None,
             bullet_char: None,
-            indent_first_bullet: None
+            indent_first_bullet: None,
         };
 
         let preset_config = PresetConfig {
@@ -408,31 +397,28 @@ mod tests {
 
         assert_eq!(padding, Padding::new(10.0, 20.0, 30.0, 40.0));
     }
-    
+
     // * --- Header Scales ---
-    
+
     #[test]
-    
+
     fn scale_for_level_returns_correct_scale_for_all_valid_levels() {
         // Create a HeaderScales
         let header_scales = HeaderScales::default();
-        
+
         assert_eq!(header_scales.scale_for_level(1), 2.0);
         assert_eq!(header_scales.scale_for_level(2), 1.6);
         assert_eq!(header_scales.scale_for_level(3), 1.3);
         assert_eq!(header_scales.scale_for_level(4), 1.1);
         assert_eq!(header_scales.scale_for_level(5), 1.0);
         assert_eq!(header_scales.scale_for_level(6), 1.0);
-        
-        
     }
-    
+
     #[test]
     #[should_panic(expected = "Expected a value between 1 and 6 inclusive")]
     fn scale_for_level_panics_on_invalid_level() {
         let header_scales = HeaderScales::default();
-        
+
         header_scales.scale_for_level(99);
     }
-    
 }

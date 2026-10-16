@@ -11,7 +11,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             // then recurse through the children updating the 'local' context, i.e. the context that has accumulated at the branch until that point
             // then return the final list.
             for child in &strong.children {
-                blocks.extend(parse_inline_styles(child, context.clone()));
+                blocks.extend(parse_inline_styles(child, context));
             }
             blocks
         }
@@ -21,7 +21,7 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
             let mut blocks = Vec::new();
 
             for child in &emph.children {
-                blocks.extend(parse_inline_styles(child, context.clone()));
+                blocks.extend(parse_inline_styles(child, context));
             }
             blocks
         }
@@ -55,13 +55,19 @@ fn parse_inline_styles(node: &Node, mut context: StyleContext) -> Vec<StyledSegm
         }
         Node::Html(html) => {
             let mut blocks = Vec::new();
-            if html.value.to_ascii_lowercase() == "<br>" || html.value.to_lowercase() == "<br/>" {
+            if html.value.eq_ignore_ascii_case("<br>") || html.value.to_lowercase() == "<br/>" {
                 blocks.extend(vec![StyledSegment::HardBreak]);
             } else {
                 // * Render the HTML as-is.
-                eprintln!("Warning: Unsupported HTML Tag {}. Rendering as plain text...", html.value.clone());
-                
-                blocks.push(StyledSegment::Text(StyledBlock::new(html.value.clone(), context)));
+                eprintln!(
+                    "Warning: Unsupported HTML Tag {}. Rendering as plain text...",
+                    html.value.clone()
+                );
+
+                blocks.push(StyledSegment::Text(StyledBlock::new(
+                    html.value.clone(),
+                    context,
+                )));
             }
             blocks
         }
@@ -110,7 +116,7 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
         Node::Paragraph(_) => {
             // * Process all inline styling of the Node
             let segments = parse_inline_styles(node, StyleContext::default());
-            vec![StyledLine::Paragraph { segments: segments }]
+            vec![StyledLine::Paragraph { segments }]
         }
         Node::Html(_) => {
             // * Html styling is handled at an inline-level and returned as a Text object.
@@ -119,8 +125,8 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             // * This is subject to change, and will require more advanced filtering at the block level later.
             // todo support HTML tables. This should be part of the table feature impl in a future version.
             let segments = parse_inline_styles(node, StyleContext::default());
-            vec![StyledLine::Paragraph { segments: segments }]
-        },
+            vec![StyledLine::Paragraph { segments }]
+        }
         Node::List(list) => {
             let mut lines = Vec::new();
             let mut counter = list.start.unwrap_or(1);

@@ -103,13 +103,13 @@ pub fn styled_line_to_layout(
                 .collect();
 
             buffer.set_rich_text(
-                font_system,
                 rich_text,
                 &Attrs::new().family(Family::SansSerif),
                 cosmic_text::Shaping::Advanced,
                 None,
             );
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
+            buffer.set_size(Some(available_width), Some(f32::MAX));
+            buffer.shape_until_scroll(font_system, false);
 
             LayoutResult::Line(LayoutLine {
                 buffer,
@@ -160,14 +160,14 @@ pub fn styled_line_to_layout(
                 .collect();
 
             buffer.set_rich_text(
-                font_system,
                 rich_text,
                 &Attrs::new().family(Family::SansSerif),
                 cosmic_text::Shaping::Advanced,
                 None,
             );
 
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
+            buffer.set_size(Some(available_width), Some(f32::MAX));
+            buffer.shape_until_scroll(font_system, false);
 
             LayoutResult::Line(LayoutLine {
                 buffer,
@@ -238,14 +238,14 @@ pub fn styled_line_to_layout(
                 .collect();
 
             buffer.set_rich_text(
-                font_system,
                 rich_text,
                 &Attrs::new().family(Family::SansSerif),
                 cosmic_text::Shaping::Advanced,
                 None,
             );
 
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
+            buffer.set_size(Some(available_width), Some(f32::MAX));
+            buffer.shape_until_scroll(font_system, false);
 
             LayoutResult::Line(LayoutLine {
                 buffer,
@@ -319,7 +319,6 @@ pub fn styled_line_to_layout(
                 .collect();
 
             buffer.set_rich_text(
-                font_system,
                 rich_text,
                 &Attrs::new().family(Family::SansSerif),
                 cosmic_text::Shaping::Advanced,
@@ -328,7 +327,8 @@ pub fn styled_line_to_layout(
 
             // * Our buffer size is limited by Width as we want accurate word-wrapping to the canvas size.
             // * Our height is unbounded because we are not testing for vertical space, as each line is run on a different Buffer.
-            buffer.set_size(font_system, Some(available_width), Some(f32::MAX));
+            buffer.set_size(Some(available_width), Some(f32::MAX));
+            buffer.shape_until_scroll(font_system, false);
 
             LayoutResult::Line(LayoutLine {
                 buffer,
@@ -376,7 +376,7 @@ pub fn process_layouts(layouts: Vec<LayoutResult>, cfg: &SvgConfig) -> Vec<Strin
             }
 
             LayoutResult::Blank { height } => {
-                cumulative_y_offset = cumulative_y_offset + height;
+                cumulative_y_offset += height;
             }
         }
         // Return final SVG collection.
@@ -393,7 +393,7 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
 
     let mut run_byte_offset: usize = 0;
 
-    for (_idx, run) in layout.buffer.layout_runs().enumerate() {
+    for run in layout.buffer.layout_runs() {
         let baseline_y = y_cursor + run.line_y;
 
         let full_text: &String = &layout
@@ -436,8 +436,8 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
 
 fn process_run(
     run: &LayoutRun,
-    segment_ranges: &Vec<SegmentRange>,
-    segments: &Vec<StyledSegment>,
+    segment_ranges: &[SegmentRange],
+    segments: &[StyledSegment],
     prefix_len: usize,
     font_size: f32,
     run_byte_offset: usize,
@@ -458,7 +458,7 @@ fn process_run(
         if !prefix_text.is_empty() {
             tspans.push(TSpan {
                 text: prefix_text,
-                font_size: font_size,
+                font_size,
                 weight: Weight::NORMAL,
                 style: Style::Normal,
                 family: FamilyOwned::SansSerif,
@@ -498,25 +498,25 @@ fn process_run(
         };
 
         // Check if we have moved into a different segment.
-        if let Some(prev_idx) = current_segment_idx {
-            if prev_idx != segment_idx {
-                // Emit the accumulated text as a TSpan with styling from the previous segment.
-                let prev_segment = match &segments[prev_idx] {
-                    StyledSegment::Text(block) => block,
-                    _ => unreachable!("Non-text segment shouldn't have a Range"),
-                };
+        if let Some(prev_idx) = current_segment_idx
+            && prev_idx != segment_idx
+        {
+            // Emit the accumulated text as a TSpan with styling from the previous segment.
+            let prev_segment = match &segments[prev_idx] {
+                StyledSegment::Text(block) => block,
+                _ => unreachable!("Non-text segment shouldn't have a Range"),
+            };
 
-                tspans.push(TSpan {
-                    text: current_text.clone(),
-                    font_size: font_size,
-                    weight: prev_segment.weight,
-                    style: prev_segment.style,
-                    family: prev_segment.family.clone(),
-                });
+            tspans.push(TSpan {
+                text: current_text.clone(),
+                font_size,
+                weight: prev_segment.weight,
+                style: prev_segment.style,
+                family: prev_segment.family.clone(),
+            });
 
-                // Reset text buffer and update our X to move inline with all previous characters.
-                current_text.clear();
-            }
+            // Reset text buffer and update our X to move inline with all previous characters.
+            current_text.clear();
         }
         let ch = &run.text[glyph.start..glyph.end];
         current_text.push_str(ch);
@@ -524,20 +524,20 @@ fn process_run(
     }
 
     // At the end of the run, if we have any text remaining in our buffer, crunch it.
-    if !current_text.is_empty() {
-        if let Some(seg_idx) = current_segment_idx {
-            let segment = match &segments[seg_idx] {
-                StyledSegment::Text(block) => block,
-                _ => unreachable!("Non-text segment shouldn't have a Range"),
-            };
-            tspans.push(TSpan {
-                text: current_text.clone(),
-                font_size: font_size,
-                weight: segment.weight,
-                style: segment.style,
-                family: segment.family.clone(),
-            });
-        }
+    if !current_text.is_empty()
+        && let Some(seg_idx) = current_segment_idx
+    {
+        let segment = match &segments[seg_idx] {
+            StyledSegment::Text(block) => block,
+            _ => unreachable!("Non-text segment shouldn't have a Range"),
+        };
+        tspans.push(TSpan {
+            text: current_text.clone(),
+            font_size,
+            weight: segment.weight,
+            style: segment.style,
+            family: segment.family.clone(),
+        });
     }
 
     tspans
@@ -591,7 +591,7 @@ fn tspans_to_svg(tspans: &[TSpan], x: f32, y: f32) -> String {
     )
 }
 ///  Precompute the text range of our StyledBlock text as a byte range, which matches with the Cosmic Glyph start/end indices.
-fn build_segment_ranges(segments: &Vec<StyledSegment>) -> Vec<SegmentRange> {
+fn build_segment_ranges(segments: &[StyledSegment]) -> Vec<SegmentRange> {
     let mut ranges = Vec::new();
     let mut current_pos = 0;
 
@@ -658,8 +658,7 @@ mod tests {
         // override default Sans-Serif on db.
         db.set_sans_serif_family("Noto Sans"); // ! I don't know how to validate this...
 
-        let font_sys = FontSystem::new_with_locale_and_db("en-US".to_string(), db);
-        font_sys
+        FontSystem::new_with_locale_and_db("en-US".to_string(), db)
     }
     // * --- tspan_to_svg ---
     #[test]
@@ -792,7 +791,7 @@ mod tests {
         };
 
         let svg_string = tspans_to_svg(&[tspan], 0.0, 16.0);
-        assert!(svg_string.contains(&compare_text));
+        assert!(svg_string.contains(compare_text));
     }
     // * --- build_segment_ranges ---
     #[test]
