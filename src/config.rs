@@ -354,7 +354,7 @@ mod tests {
             .expect("Should be able to build config from PresetConfig & Default SvgConfig.");
 
         // * Assert
-        println!("Basic Settings:{:#?}", &combined_settings);
+        println!("Basic Settings:{:#?}", combined_settings);
         // Verify the font size has changed
         assert_eq!(
             combined_settings.get::<f32>("text_opts.font_size").unwrap(),

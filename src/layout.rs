@@ -212,7 +212,7 @@ pub fn styled_line_to_layout(
                                 // We need to insert the bullet character here, however we can't simply use format!().as_str
                                 // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
                                 // Therefore, we need to have `styled_segments` own the full String and later have `buffer` borrow it for it's final form.
-                                format!("{}{}", &prefix, &block.text)
+                                format!("{}{}", prefix, block.text)
                             } else {
                                 block.text.clone()
                             };
@@ -293,7 +293,7 @@ pub fn styled_line_to_layout(
                                 // We need to insert the bullet character here, however we can't simply use format!().as_str
                                 // as the String returned by format!() doesn't live long enough when it leaves the styled_segments scope.
                                 // Therefore, we need to have `styled_segments` own the full String and later have `buffer` borrow it for it's final form.
-                                format!("{}{}", &prefix, &block.text)
+                                format!("{}{}", prefix, block.text)
                             } else {
                                 block.text.clone()
                             };
@@ -342,7 +342,10 @@ pub fn styled_line_to_layout(
         StyledLine::Blank => LayoutResult::Blank {
             height: cfg.get_paragraph_spacing_factor(),
         },
-        _ => panic! {"StyledLine to Layout has not yet implemented: {:#?}", &line.get_type()},
+        _ => panic!(
+            "StyledLine to Layout has not yet implemented: {:#?}",
+            line.get_type()
+        ),
     }
 }
 
