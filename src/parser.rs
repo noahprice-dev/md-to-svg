@@ -132,33 +132,39 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
             let mut counter = list.start.unwrap_or(1);
 
             for child in &list.children {
-                if let Node::ListItem(item) = child {
-                    for item_child in &item.children {
-                        match item_child {
-                            Node::Paragraph(_) => {
-                                // * Parse inline styles
-                                let segments =
-                                    parse_inline_styles(item_child, StyleContext::default());
-                                // * Handle Bullet List vs Numbered List
-                                if list.ordered {
-                                    lines.push(StyledLine::NumberedListItem {
-                                        segments,
-                                        number: counter,
-                                        indent,
-                                    });
-                                    counter += 1; // increase for next list item.
-                                } else {
-                                    lines.push(StyledLine::BulletListItem { segments, indent });
-                                }
-                            }
-                            // * Check if we have a nested list
-                            Node::List(_) => {
-                                // Recurse and handle the new list's contents
-                                lines.extend(parse_blocks(item_child, indent + 1))
-                            }
+                let Node::ListItem(item) = child else {
+                    continue;
+                };
 
-                            _ => todo!(),
-                        }
+                for item_child in &item.children {
+                    // * Check if we have a nested list; recurse and handle its contents.
+                    if let Node::List(_) = item_child {
+                        lines.extend(parse_blocks(item_child, indent + 1));
+                        continue;
+                    }
+
+                    // * Anything other than a nested list becomes this item's inline content.
+                    // * Non-Paragraph nodes (e.g. a Blockquote or Code block inside a list item)
+                    // * aren't styled specially, so warn and fall back to plain text rather
+                    // * than panicking on markdown we don't fully support yet.
+                    if !matches!(item_child, Node::Paragraph(_)) {
+                        eprintln!(
+                            "Warning: Unsupported list item content: {:#?}. Rendering as plain text...",
+                            item_child
+                        );
+                    }
+
+                    let segments = parse_inline_styles(item_child, StyleContext::default());
+                    // * Handle Bullet List vs Numbered List
+                    if list.ordered {
+                        lines.push(StyledLine::NumberedListItem {
+                            segments,
+                            number: counter,
+                            indent,
+                        });
+                        counter += 1; // increase for next list item.
+                    } else {
+                        lines.push(StyledLine::BulletListItem { segments, indent });
                     }
                 }
             }
@@ -175,5 +181,30 @@ pub fn parse_blocks(node: &Node, indent: u8) -> Vec<StyledLine> {
                 segments: unknown_node_segments,
             }]
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use markdown::{ParseOptions, to_mdast};
+
+    use super::parse_blocks;
+    use crate::styles::StyledLine;
+
+    #[test]
+    fn list_item_with_unsupported_content_renders_as_plain_text_instead_of_panicking() {
+        // * A blockquote inside a list item isn't a Paragraph or a nested List, so it used to
+        // * hit a `todo!()`. It should now degrade to plain text rather than panicking.
+        let md = "- a normal bullet\n- > a blockquote inside a list item\n";
+        let root = to_mdast(md, &ParseOptions::default()).expect("should parse as valid markdown");
+
+        let lines = parse_blocks(&root, 0);
+
+        assert_eq!(lines.len(), 2);
+        assert!(
+            lines
+                .iter()
+                .all(|line| matches!(line, StyledLine::BulletListItem { .. }))
+        );
     }
 }

@@ -342,10 +342,6 @@ pub fn styled_line_to_layout(
         StyledLine::Blank => LayoutResult::Blank {
             height: cfg.get_paragraph_spacing_factor(),
         },
-        _ => panic!(
-            "StyledLine to Layout has not yet implemented: {:#?}",
-            line.get_type()
-        ),
     }
 }
 
@@ -393,19 +389,21 @@ fn process_layout_line(layout: &LayoutLine, y_cursor: f32, cfg: &SvgConfig) -> (
     // * Build our Segment Map for this LayoutLine.
     let segment_ranges = build_segment_ranges(&layout.segments);
 
+    // * Used below to detect whether a run ends in an explicit HardBreak; this is
+    // * invariant across runs, so it's computed once per LayoutLine rather than per run.
+    let full_text: String = layout
+        .segments
+        .iter()
+        .map(|seg| match seg {
+            StyledSegment::Text(block) => block.text.as_str(),
+            StyledSegment::HardBreak => "\n",
+        })
+        .collect();
+
     let mut run_byte_offset: usize = 0;
 
     for run in layout.buffer.layout_runs() {
         let baseline_y = y_cursor + run.line_y;
-
-        let full_text: &String = &layout
-            .segments
-            .iter()
-            .map(|seg| match seg {
-                StyledSegment::Text(block) => block.text.clone(),
-                StyledSegment::HardBreak => "\n".to_string(),
-            })
-            .collect();
 
         let current_x = cfg.canvas_opts.padding.left + layout.indent_offset; // handle starting offset for the line of text.
 

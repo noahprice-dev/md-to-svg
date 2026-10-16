@@ -47,6 +47,7 @@ impl StyledSegment {
 // todo incomplete list of missing variants:
 // - Table
 // - Blockquote
+// - Code (fenced/indented code blocks)
 #[derive(Clone, Debug)]
 pub enum StyledLine {
     Header {
@@ -65,9 +66,6 @@ pub enum StyledLine {
     Paragraph {
         segments: Vec<StyledSegment>,
     },
-    InlineCode {
-        text: String,
-    },
     Blank,
 }
 
@@ -78,7 +76,6 @@ impl StyledLine {
             StyledLine::BulletListItem { .. } => String::from("Bullet List Item"),
             StyledLine::NumberedListItem { .. } => String::from("Numbered List Item"),
             StyledLine::Paragraph { .. } => String::from("Paragraph"),
-            StyledLine::InlineCode { .. } => String::from("Code"),
             StyledLine::Blank => String::from("Blank"),
         }
     }

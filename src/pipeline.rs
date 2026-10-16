@@ -79,9 +79,9 @@ pub fn write_svg_to_file(
 
     let mut writer = BufWriter::new(outfile);
 
-    writeln!(writer, "{}", svg_data).unwrap();
+    writeln!(writer, "{}", svg_data)
+        .map_err(|err| MdToSvgError::OutputNotWritable(output_path.to_path_buf(), err))?;
 
-    // ? Do we need a more robust error check on the flush here?
     writer
         .flush()
         .map_err(|err| MdToSvgError::OutputNotWritable(output_path.to_path_buf(), err))?;

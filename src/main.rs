@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("BUG: CLI Overrides should always serialize"),
         )
         .build()?;
-    let svg_cfg: SvgConfig = settings.try_deserialize().unwrap();
+    let svg_cfg: SvgConfig = settings.try_deserialize()?;
 
     let mut font_system = FontSystem::new(); // * Detect system fonts and load
 
