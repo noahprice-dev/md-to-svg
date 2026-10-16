@@ -1,4 +1,3 @@
-use core::{f32, panic};
 use cosmic_text::{
     Attrs, Buffer, Family, FamilyOwned, FontSystem, LayoutRun, Metrics, Style, Weight,
 };
